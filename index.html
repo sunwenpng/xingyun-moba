@@ -242,9 +242,15 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
         <button class="ghost" id="pRestart">重新开始</button>
         <button class="ghost" id="pMenu">返回选英雄</button>
       </div><div>
+      <style>#pause .mus_row{margin-bottom:2px}#pause .mus_note{display:flex;align-items:center;justify-content:flex-end;gap:6px;margin:0 0 8px;font-size:11px;color:var(--muted);min-width:0}
+      #pause .mus_note span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}#pause .mus_note button{flex:none;border:0;background:none;color:var(--gold2);font-size:11px;font-weight:700;padding:4px 2px;text-decoration:underline}</style>
+      <div class="setRow mus_row"><span>背景音乐</span><div class="seg" role="radiogroup" aria-label="背景音乐" id="setBgm"><button role="radio" data-v="builtin">内置</button><button role="radio" data-v="user">自选…</button></div></div>
+      <div class="mus_note"><span id="pBgmName">可选手机里的歌作背景音乐 · 仅保存在本机</span><button id="pBgmChg" hidden>换一首</button></div>
+      <input type="file" accept="audio/*" id="pBgmFile" hidden>
       <div class="setRow"><span>按键大小</span><div class="seg" role="radiogroup" aria-label="按键大小" id="setSize"><button role="radio" data-v="s">小</button><button role="radio" data-v="m">中</button><button role="radio" data-v="l">大</button></div></div>
+      <div class="setRow"><span>画质</span><div class="seg" role="radiogroup" aria-label="画质" id="setQ"><button role="radio" data-v="auto">自动</button><button role="radio" data-v="low">流畅</button><button role="radio" data-v="mid">均衡</button><button role="radio" data-v="high">高清</button></div></div>
       <div class="setRow"><span>移动摇杆</span><div class="seg" role="radiogroup" aria-label="摇杆模式" id="setJoy"><button role="radio" data-v="float">浮动</button><button role="radio" data-v="fixed">固定</button></div></div>
-      <p class="help" style="text-align:left;margin-top:4px">摇杆移动 · 攻击键自动选最近目标（优先英雄）<br>技能点按自动瞄准 · 拖动手动瞄准 · R 键 4 级解锁<br>「回城」3 秒后回到泉水回血 · 金币随时可在商店花掉<br>电脑键盘：WASD 移动 · 空格攻击 · 1234 技能（瞄准鼠标）· F 召唤师技能 · B 回城 · Tab 战绩</p>
+      <p class="help" style="text-align:left;margin-top:4px">摇杆移动 · 大攻击键优先打英雄 ·「兵」键专打小兵/野怪（自动补刀）·「塔」键专打防御塔 · 被攻击的目标头上有箭头标识 · 点小地图放大<br>技能点按自动瞄准 · 拖动手动瞄准 · R 键 4 级解锁<br>「回城」3 秒后回到泉水回血 · 金币随时可在商店花掉<br>电脑键盘：WASD 移动 · 空格攻击 · 1234 技能（瞄准鼠标）· K 打兵 · L 打塔 · F 召唤师技能 · B 回城 · Tab 战绩</p>
       </div></div>
     </div>
   </section>
@@ -275,7 +281,10 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 /* ==== core.js ==== */
 'use strict';
 // ================= constants & helpers =================
-const S=3000, BLUE=0, RED=1, NEUT=2, TAU=Math.PI*2;
+// MAPK: battlefield scale. All map geography is authored in a 3000-unit frame and multiplied by MAPK
+// (unit sizes, attack/skill ranges, speeds and tower ranges are NOT scaled).
+const MAPK=1.25;
+const S=3000*MAPK, BLUE=0, RED=1, NEUT=2, TAU=Math.PI*2;
 const TEAMC=['#4aa3ff','#ff5d52','#c9a0ff'];
 const TEAMN=['蓝方','红方'];
 const FONT='"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",sans-serif';
@@ -297,13 +306,14 @@ const LANES={
   mid:[[330,2670],[1500,1500],[2670,330]],
   bot:[[330,2670],[1400,2700],[2660,2660],[2700,1600],[2670,330]]
 };
+for(const k in LANES)LANES[k]=LANES[k].map(p=>[p[0]*MAPK,p[1]*MAPK]);
 const LANEK=['top','mid','bot'];
 const LANEP=[{},{}];
 for(const k of LANEK){LANEP[BLUE][k]=LANES[k];LANEP[RED][k]=LANES[k].slice().reverse();}
-const TOWER_D={top:[820,1560],mid:[660,1160],bot:[820,1560]};
-const NEXUS=[{x:360,y:2640},{x:2640,y:360}];
-const BASET=[{x:600,y:2400},{x:2400,y:600}];
-const FOUNT=[{x:165,y:2835},{x:2835,y:165}];
+const TOWER_D={top:[820*MAPK,1560*MAPK],mid:[660*MAPK,1160*MAPK],bot:[820*MAPK,1560*MAPK]};
+const NEXUS=[{x:360*MAPK,y:2640*MAPK},{x:2640*MAPK,y:360*MAPK}];
+const BASET=[{x:600*MAPK,y:2400*MAPK},{x:2400*MAPK,y:600*MAPK}];
+const FOUNT=[{x:165*MAPK,y:2835*MAPK},{x:2835*MAPK,y:165*MAPK}];
 
 // ================= state =================
 let G=null, state='menu', UID=1, selHero='qingfeng', selDiff='normal', selSpell='flash', muted=false, portraitOk=false;
@@ -345,7 +355,7 @@ function assignLanes(heroes){
   for(const h of heroes){if(cnt[h.lane]<cap[h.lane]){cnt[h.lane]++;continue}
     const l=['top','mid','bot'].sort((a,b)=>(cnt[a]-cap[a])-(cnt[b]-cap[b]))[0];h.lane=l;cnt[l]++}
 }
-const cam={x:1500,y:1500,shake:0};
+const cam={x:S/2,y:S/2,shake:0};
 
 function mkUnit(o){return Object.assign({id:UID++,alive:true,hp:100,maxHp:100,armor:0,atk:10,ap:0,aspd:1,aspdBonus:0,range:80,ms:150,r:20,atkCd:0,stun:0,root:0,slowT:0,slowAmt:0,shield:0,shieldT:0,invulnT:0,buffs:[],face:0,target:null,lastDmg:{},hitFlash:0,vx:0,vy:0,x:0,y:0},o)}
 
@@ -567,15 +577,19 @@ function castSkill(h,i,aim){
   return true;
 }
 function skillReady(h,i){return h.alive&&h.cds[i]<=0&&!(i===3&&h.level<4)}
-function selectTarget(h,extra){
+// mode: undefined (AI default) | 'hero' (player attack: heroes first) | 'minion' (打兵: lowest-hp minion/monster, for last hits) | 'tower' (推塔: structures only)
+function selectTarget(h,extra,mode){
   let best=null,bs=1e9;const R=h.range+h.r+extra;
   for(const e of G.units){
     if(!e.alive||e.team===h.team)continue;
+    if(mode==='minion'&&e.kind!=='minion'&&e.kind!=='monster')continue;
+    if(mode==='tower'&&!isStruct(e))continue;
     if(isStruct(e)&&!isVuln(e))continue;
     if(e.invulnT>0&&e.kind==='hero')continue;
     if(e.kind==='hero'&&!API.canSee(h.team,e))continue;
     const dd=Math.sqrt(d2(h.x,h.y,e.x,e.y))-e.r;if(dd>R)continue;
     let sc=dd;
+    if(mode==='minion'){sc=e.hp+dd*.5;if(sc<bs){bs=sc;best=e}continue}
     if(e.kind==='hero')sc-=260+(1-e.hp/e.maxHp)*200;else if(e.kind==='minion')sc+=e.hp*.05;else if(isStruct(e))sc+=120;else sc+=40;
     if(sc<bs){bs=sc;best=e}
   }
@@ -599,12 +613,15 @@ function playerControl(h,dt){
   if(ml>.15){const se=typeof ui_SE!=='undefined'?ui_SE:1,my2=my/se,ml2=Math.hypot(mx,my2);h.order={type:'move',x:h.x+mx/ml2*220,y:h.y+my2/ml2*220};h.manual=null;if(h.recallT>0)h.recallT=0;return}
   if(h.order&&h.order.type==='move')h.order=null;
   const held=P.atk||keys.Space||keys.KeyJ||G.time<(P.atkTap||0);
-  if(held){if(!h.manual||!h.manual.alive||(isStruct(h.manual)&&!isVuln(h.manual))||dist(h,h.manual)>h.range+420)h.manual=selectTarget(h,240)}
+  const md=P.atkMode||'hero';
+  if(held){const bad=!h.manual||!h.manual.alive||(isStruct(h.manual)&&!isVuln(h.manual))||dist(h,h.manual)>h.range+420||(md==='tower'&&!isStruct(h.manual))||(md==='minion'&&h.manual.kind!=='minion'&&h.manual.kind!=='monster');
+    if(bad)h.manual=selectTarget(h,240,md);
+    else if(md==='minion'&&h.atkCd<=0){const n=selectTarget(h,240,md);if(n)h.manual=n}}
   else if(h.manual&&(!h.manual.alive||dist(h,h.manual)>h.range+200))h.manual=null;
   if(h.manual&&held)h.order={type:'attack',t:h.manual};
   else if(h.order&&h.order.type==='attack'&&!held)h.order=null;
 }
-function playerAttackPress(){const h=G.player;if(!h.alive)return;h.manual=selectTarget(h,240);P.atkTap=G.time+.7;if(h.recallT>0)h.recallT=0;if(!h.manual)floatTxt(h.x,h.y-h.r-20,'附近没有目标','#c8d2e6',13)}
+function playerAttackPress(mode){const h=G.player;if(!h.alive)return;if(mode)P.atkMode=mode;h.manual=selectTarget(h,240,mode||P.atkMode||'hero');P.atkTap=G.time+.7;if(h.recallT>0)h.recallT=0;if(!h.manual)floatTxt(h.x,h.y-h.r-20,mode==='tower'?'附近没有可攻击的塔':mode==='minion'?'附近没有小兵':'附近没有目标','#c8d2e6',13)}
 
 // ================= main update =================
 function update(dt){
@@ -635,8 +652,8 @@ function update(dt){
   // fountains
   for(const team of [BLUE,RED]){const F=FOUNT[team];
     for(const h of G.heroes){if(!h.alive)continue;const dd=d2(h.x,h.y,F.x,F.y);
-      if(h.team===team&&dd<430*430){h.hp=Math.min(h.maxHp,h.hp+h.maxHp*.14*dt)}
-      else if(h.team!==team&&dd<700*700){dealDamage(null,h,900*dt,{silent:true});if(Math.random()<.2)burst(h.x,h.y,TEAMC[team],2)}}}
+      if(h.team===team&&dd<(430*MAPK)**2){h.hp=Math.min(h.maxHp,h.hp+h.maxHp*.14*dt)}
+      else if(h.team!==team&&dd<(700*MAPK)**2){dealDamage(null,h,900*dt,{silent:true});if(Math.random()<.2)burst(h.x,h.y,TEAMC[team],2)}}}
   separate();
   updateProjs(dt);
   for(const p of G.parts){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=.92;p.vy*=.92;p.life-=dt}
@@ -1149,7 +1166,7 @@ const map_BUSH_BASE=[
   {x:560,y:760,rx:118,ry:58,a:Math.PI/2},   // side lane edge near corner
   {x:760,y:1180,rx:130,ry:56,a:Math.PI/4},  // river entrance
   {x:1200,y:1580,rx:112,ry:50,a:-Math.PI/4} // mid lane flank / river mouth
-];
+].map(b=>({...b,x:b.x*MAPK,y:b.y*MAPK})); // positions authored in the 3000 frame; sizes unscaled
 const map_bushes=(()=>{
   const out=[];
   for(const b of map_BUSH_BASE){
@@ -1224,7 +1241,7 @@ function buildStructures(){
 const CAMPS=[
  {x:820,y:1760,type:'wolf'},{x:1250,y:2240,type:'golem'},{x:2180,y:1240,type:'wolf'},{x:1750,y:760,type:'golem'},
  {x:930,y:930,type:'colossus'},{x:2070,y:2070,type:'drake'}
-];
+].map(c=>({...c,x:c.x*MAPK,y:c.y*MAPK}));
 const MON={
  wolf:{n:'影狼',hp:1300,atk:38,armor:15,r:30,gold:90,xp:80,c:'#7b8aa8',resp:60},
  golem:{n:'石魔',hp:1800,atk:46,armor:25,r:36,gold:110,xp:95,c:'#9a7a58',resp:60},
@@ -1235,7 +1252,7 @@ function buildCamps(){for(const c of CAMPS){const camp={...c,unit:null,respawnAt
 function spawnMonster(c){const m=MON[c.type];const u=mkUnit({kind:'monster',team:NEUT,type:c.type,x:c.x,y:c.y,hx:c.x,hy:c.y,r:m.r,maxHp:m.hp*(1+G.time/60*.05),armor:m.armor,atk:m.atk*(1+G.time/60*.04),aspd:.8,range:m.r+60,ms:220,camp:c,boss:!!m.boss,name:m.n,col:m.c});u.hp=u.maxHp;c.unit=u;G.units.push(u)}
 
 // River heal fruit (灵果): walk over a ripe fruit to heal 12% max HP + 60 and gain 25% move speed for 2s. Respawns 75s.
-const map_FRUITS=[{x:1170,y:1170},{x:1830,y:1830}];
+const map_FRUITS=[{x:1170*MAPK,y:1170*MAPK},{x:1830*MAPK,y:1830*MAPK}];
 const map_FRUIT_RESP=75;
 
 // ---------- waves & minions ----------
@@ -1436,100 +1453,273 @@ function map_drawLayer(ctx){
 }
 
 // ================= ground pre-render =================
-const GS=.5;let GROUND=null,MINI=null;
+// GS: texture px per world unit. 2560 px canvas (6.6M px, NPOT is fine on WebGL2; ≤4096 and well under iOS's 16M-px canvas cap).
+const GS=2560/S;let GROUND=null,MINI=null,map_groundMs=0;
 // 3D mode: trees/rocks are not painted; their placements go to map_DECOR [{x,y,r,kind:'tree'|'rock',s:0..1}] for the 3D renderer
 const map_DECOR=[];let map_3D=false;
 function buildGround(){
+  const T0=typeof performance!=='undefined'?performance.now():0;
   map_3D=typeof THREE!=='undefined'&&!(typeof r3_disabled!=='undefined'&&r3_disabled);map_DECOR.length=0;
-  const c=document.createElement('canvas');c.width=c.height=S*GS;const g=c.getContext('2d');g.scale(GS,GS);
+  const K=MAPK,PX=Math.round(S*GS);
+  const c=document.createElement('canvas');c.width=c.height=PX;const g=c.getContext('2d');g.scale(GS,GS);
   let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+  const pick=a=>a[(rnd()*a.length)|0];
   const laneD=(x,y)=>{let m=1e9;for(const k of LANEK)m=Math.min(m,pathDistTo(LANES[k],x,y));return m};
   const riverD=(x,y)=>Math.abs(x-y)/Math.SQRT2;
-  const baseD=(x,y)=>Math.min(Math.hypot(x-260,y-2740),Math.hypot(x-2740,y-260));
+  const BC=[{x:260*K,y:2740*K},{x:2740*K,y:260*K}],BR=560*K; // base plaza centers / radius
+  const baseD=(x,y)=>Math.min(Math.hypot(x-BC[0].x,y-BC[0].y),Math.hypot(x-BC[1].x,y-BC[1].y));
   const campD=(x,y)=>{let m=1e9;for(const k of CAMPS)m=Math.min(m,Math.hypot(x-k.x,y-k.y));return m};
   const bushNear=(x,y,pad)=>{for(const b of map_bushes)if(Math.hypot(x-b.x,y-b.y)<b.rx+pad)return true;return false};
   const poly=(p)=>{g.beginPath();g.moveTo(p[0][0],p[0][1]);for(let i=1;i<p.length;i++)g.lineTo(p[i][0],p[i][1])};
-  // --- grass base with soft tonal noise
-  g.fillStyle='#29492f';g.fillRect(0,0,S,S);
-  for(let i=0;i<2200;i++){const x=rnd()*S,y=rnd()*S,r=24+rnd()*90;g.fillStyle=rnd()<.5?'rgba(70,120,62,.10)':'rgba(12,34,22,.15)';g.beginPath();g.arc(x,y,r,0,TAU);g.fill()}
-  for(let i=0;i<2600;i++){const x=rnd()*S,y=rnd()*S;g.strokeStyle=rnd()<.5?'rgba(120,170,90,.16)':'rgba(15,40,20,.2)';g.lineWidth=2;g.beginPath();g.moveTo(x,y);g.lineTo(x+rnd()*6-3,y-6-rnd()*8);g.stroke()}
+  const ell=(P,x,y,rx,ry,a)=>{P.moveTo(x+Math.cos(a)*rx,y+Math.sin(a)*rx);P.ellipse(x,y,rx,ry,a,0,TAU)};
+  const circ=(P,x,y,r)=>{P.moveTo(x+r,y);P.arc(x,y,r,0,TAU)};
+  const fillP=(P,col)=>{g.fillStyle=col;g.fill(P)};
+  // soft round sprite (ambient occlusion / glows), drawn with drawImage — much cheaper than per-object gradients
+  const spr=document.createElement('canvas');spr.width=spr.height=64;{const s=spr.getContext('2d'),gr=s.createRadialGradient(32,32,0,32,32,32);
+    gr.addColorStop(0,'rgba(0,0,0,1)');gr.addColorStop(.45,'rgba(0,0,0,.6)');gr.addColorStop(1,'rgba(0,0,0,0)');s.fillStyle=gr;s.fillRect(0,0,64,64)}
+  const ao=(x,y,r,a)=>{g.globalAlpha=a;g.drawImage(spr,x-r,y-r,r*2,r*2);g.globalAlpha=1};
+  // river centre line: authored in the 3000 frame, meanders around y=x
+  const RV=(t,off)=>{const p=(-100+t*3200)*K,o=Math.sin(t*9)*40*K;return{x:p+o+off/Math.SQRT2,y:p-o-off/Math.SQRT2}};
+  const RW=K; // river widths scale with the map
   g.lineCap='round';g.lineJoin='round';
-  // --- river: sandy banks, deep water, lighter channel, ripples
-  const riverPath=()=>{g.beginPath();g.moveTo(-100,-100);for(let t=0;t<=1.0001;t+=.025){const p=-100+t*3200,o=Math.sin(t*9)*40;g.lineTo(p+o,p-o)}};
-  riverPath();g.strokeStyle='#4f5a3c';g.lineWidth=330;g.stroke();
-  g.strokeStyle='#76704c';g.lineWidth=300;g.stroke();
-  g.strokeStyle='#1b4a5e';g.lineWidth=258;g.stroke();
-  g.strokeStyle='#26677f';g.lineWidth=220;g.stroke();
-  g.strokeStyle='rgba(120,200,225,.14)';g.lineWidth=110;g.stroke();
-  for(let i=0;i<260;i++){const t=rnd(),p=-100+t*3200,o=Math.sin(t*9)*40,off=(rnd()-.5)*190;const x=p+o+off/Math.SQRT2,y=p-o-off/Math.SQRT2;
-    g.strokeStyle='rgba(200,240,255,.16)';g.lineWidth=3;g.beginPath();g.moveTo(x-14,y-14);g.quadraticCurveTo(x+4,y-2,x+14,y+14);g.stroke()}
-  for(let i=0;i<70;i++){const t=rnd(),p=-100+t*3200,o=Math.sin(t*9)*40,s=rnd()<.5?1:-1,off=s*(120+rnd()*25);const x=p+o+off/Math.SQRT2,y=p-o-off/Math.SQRT2;
-    const r=8+rnd()*12;g.fillStyle='#5c5a48';g.beginPath();g.ellipse(x,y,r*1.3,r,rnd()*3,0,TAU);g.fill();g.fillStyle='rgba(255,255,240,.14)';g.beginPath();g.ellipse(x-r*.3,y-r*.3,r*.5,r*.35,0,0,TAU);g.fill()}
-  // --- lanes: dark border, dirt, worn center, paving stones
-  for(const k of LANEK){poly(LANES[k]);g.strokeStyle='#3e3a26';g.lineWidth=240;g.stroke()}
-  for(const k of LANEK){poly(LANES[k]);g.strokeStyle='#7f6f48';g.lineWidth=212;g.stroke()}
-  for(const k of LANEK){poly(LANES[k]);g.strokeStyle='#9b885a';g.lineWidth=160;g.stroke()}
-  for(const k of LANEK){poly(LANES[k]);g.strokeStyle='rgba(255,236,190,.08)';g.lineWidth=70;g.stroke()}
-  for(const k of LANEK){const p=LANES[k],L=pathLen(p);
-    for(let d=40;d<L-40;d+=64){const a=pathAt(p,d),b=pathAt(p,d+4),ang=Math.atan2(b.y-a.y,b.x-a.x),nx=-Math.sin(ang),ny=Math.cos(ang);
-      for(const off of [-62,-21,21,62]){if(rnd()<.35)continue;const x=a.x+nx*(off+rnd()*10-5),y=a.y+ny*(off+rnd()*10-5);
-        g.save();g.translate(x,y);g.rotate(ang+rnd()*.3-.15);g.fillStyle=rnd()<.5?'rgba(190,175,135,.32)':'rgba(140,125,90,.35)';g.fillRect(-20,-14,40,28);
-        g.strokeStyle='rgba(50,40,20,.35)';g.lineWidth=2;g.strokeRect(-20,-14,40,28);g.restore()}}}
-  for(let i=0;i<900;i++){const x=rnd()*S,y=rnd()*S;if(laneD(x,y)>95)continue;g.fillStyle=rnd()<.5?'rgba(255,240,200,.08)':'rgba(60,45,20,.14)';g.beginPath();g.arc(x,y,3+rnd()*9,0,TAU);g.fill()}
-  // --- center plaza
-  g.fillStyle='#6e6858';g.beginPath();g.arc(1500,1500,178,0,TAU);g.fill();g.strokeStyle='#45402f';g.lineWidth=12;g.stroke();
-  g.fillStyle='#857e6a';g.beginPath();g.arc(1500,1500,135,0,TAU);g.fill();
-  g.strokeStyle='rgba(255,240,200,.25)';g.lineWidth=4;g.beginPath();g.arc(1500,1500,110,0,TAU);g.stroke();
-  for(let i=0;i<8;i++){const a=i/8*TAU;g.beginPath();g.moveTo(1500+Math.cos(a)*40,1500+Math.sin(a)*40);g.lineTo(1500+Math.cos(a)*135,1500+Math.sin(a)*135);g.stroke()}
-  g.fillStyle='rgba(200,180,255,.25)';g.beginPath();g.arc(1500,1500,34,0,TAU);g.fill();
-  // --- bases: stone plaza, team inlay rings, tiles
-  for(const team of [BLUE,RED]){const cx=team===BLUE?260:2740,cy=team===BLUE?2740:260,tc=team===BLUE?'110,180,255':'255,120,110';
-    const gr=g.createRadialGradient(cx,cy,50,cx,cy,640);gr.addColorStop(0,team===BLUE?'#4a6283':'#83504a');gr.addColorStop(.7,team===BLUE?'#33475e':'#5e3836');gr.addColorStop(1,'rgba(0,0,0,0)');
-    g.fillStyle=gr;g.beginPath();g.arc(cx,cy,640,0,TAU);g.fill();
-    for(let r=140;r<=500;r+=90){g.strokeStyle='rgba(20,22,30,.35)';g.lineWidth=3;g.beginPath();g.arc(cx,cy,r,0,TAU);g.stroke()}
-    for(let i=0;i<24;i++){const a=i/24*TAU;g.strokeStyle='rgba(20,22,30,.25)';g.lineWidth=3;g.beginPath();g.moveTo(cx+Math.cos(a)*140,cy+Math.sin(a)*140);g.lineTo(cx+Math.cos(a)*500,cy+Math.sin(a)*500);g.stroke()}
-    g.strokeStyle=`rgba(${tc},.45)`;g.lineWidth=10;g.beginPath();g.arc(cx,cy,525,0,TAU);g.stroke();
-    g.strokeStyle=`rgba(${tc},.18)`;g.lineWidth=26;g.beginPath();g.arc(cx,cy,545,0,TAU);g.stroke();
-    const F=FOUNT[team];g.fillStyle=`rgba(${tc},.22)`;g.beginPath();g.arc(F.x,F.y,260,0,TAU);g.fill();
-    g.strokeStyle=`rgba(${tc},.5)`;g.lineWidth=5;g.beginPath();g.arc(F.x,F.y,140,0,TAU);g.stroke();
-    const N=NEXUS[team];g.fillStyle='rgba(30,30,40,.35)';g.beginPath();g.arc(N.x,N.y,120,0,TAU);g.fill();g.strokeStyle=`rgba(${tc},.5)`;g.lineWidth=6;g.stroke()}
-  // --- tower pads
-  for(const team of [BLUE,RED]){for(const k of LANEK)for(const d of TOWER_D[k]){const p=pathAt(LANEP[team][k],d);
-      g.fillStyle='rgba(60,58,52,.55)';g.beginPath();g.arc(p.x,p.y,78,0,TAU);g.fill();g.strokeStyle='rgba(30,28,24,.5)';g.lineWidth=5;g.stroke()}
-    const b=BASET[team];g.fillStyle='rgba(60,58,52,.55)';g.beginPath();g.arc(b.x,b.y,82,0,TAU);g.fill()}
-  // --- camp clearings
-  for(const c of CAMPS){const boss=c.type==='colossus'||c.type==='drake',R=boss?160:100;
-    g.fillStyle='rgba(66,52,34,.55)';g.beginPath();g.arc(c.x,c.y,R,0,TAU);g.fill();
-    g.strokeStyle=boss?(c.type==='drake'?'rgba(230,110,60,.35)':'rgba(180,170,230,.35)'):'rgba(30,22,12,.35)';g.lineWidth=boss?8:5;g.beginPath();g.arc(c.x,c.y,R-6,0,TAU);g.stroke();
-    for(let i=0;i<(boss?9:6);i++){const a=i/(boss?9:6)*TAU+rnd()*.3,x=c.x+Math.cos(a)*(R+10),y=c.y+Math.sin(a)*(R+10),r=10+rnd()*10;
-      g.fillStyle='#4c4f4b';g.beginPath();g.ellipse(x,y,r*1.2,r*.85,a,0,TAU);g.fill();g.fillStyle='rgba(255,255,255,.12)';g.beginPath();g.ellipse(x-r*.3,y-r*.3,r*.45,r*.3,0,0,TAU);g.fill()}}
-  // --- jungle decor: trees (dark blue-green canopies, clearly NOT bushes) and rocks
-  for(let i=0;i<560;i++){const x=60+rnd()*(S-120),y=60+rnd()*(S-120);
-    if(laneD(x,y)<175||riverD(x,y)<190||baseD(x,y)<700||campD(x,y)<190||bushNear(x,y,90)||Math.hypot(x-1500,y-1500)<260)continue;
+
+  // ---------- 1. grass: base tone, large hue patches, medium mottling, blades
+  g.fillStyle='#2a4a30';g.fillRect(0,0,S,S);
+  for(let i=0;i<150;i++){const x=rnd()*S,y=rnd()*S,r=(160+rnd()*320)*K;
+    const col=pick(['74,118,58','46,92,60','30,62,44','86,112,54','20,46,34']),a=.12+rnd()*.12;
+    const gr=g.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,`rgba(${col},${a})`);gr.addColorStop(1,`rgba(${col},0)`);g.fillStyle=gr;g.fillRect(x-r,y-r,r*2,r*2)}
+  {const A=new Path2D(),B=new Path2D();for(let i=0;i<2600*K*K;i++){const x=rnd()*S,y=rnd()*S,r=20+rnd()*70;circ(rnd()<.5?A:B,x,y,r)}
+    fillP(A,'rgba(78,128,64,.08)');fillP(B,'rgba(10,30,20,.11)')}
+  {const B=[new Path2D(),new Path2D(),new Path2D(),new Path2D()];
+    for(let i=0;i<16000*K*K;i++){const x=rnd()*S,y=rnd()*S,P=B[(rnd()*4)|0],h=5+rnd()*9,l=rnd()*6-3;P.moveTo(x,y);P.lineTo(x+l,y-h)}
+    g.lineWidth=2.2;g.strokeStyle='rgba(128,178,96,.22)';g.stroke(B[0]);g.strokeStyle='rgba(98,150,80,.2)';g.stroke(B[1]);
+    g.strokeStyle='rgba(14,38,22,.26)';g.stroke(B[2]);g.lineWidth=1.6;g.strokeStyle='rgba(170,210,120,.18)';g.stroke(B[3])}
+  // clover / darker lush clumps
+  {const P=new Path2D(),Q=new Path2D();for(let i=0;i<420*K*K;i++){const cx=rnd()*S,cy=rnd()*S,n=4+(rnd()*6|0);
+    for(let j=0;j<n;j++){const x=cx+rnd()*44-22,y=cy+rnd()*30-15,r=4+rnd()*4;circ(P,x,y,r);circ(Q,x-1.2,y-1.4,r*.45)}}
+    fillP(P,'rgba(52,104,52,.55)');fillP(Q,'rgba(130,190,110,.35)')}
+
+  // ---------- 2. river: muddy bank, sand, wet sand, shallows, deep channel, sheen
+  const riverPath=()=>{g.beginPath();const a=RV(0,0);g.moveTo(a.x,a.y);for(let t=.02;t<=1.0001;t+=.02){const p=RV(t,0);g.lineTo(p.x,p.y)}};
+  riverPath();
+  g.strokeStyle='rgba(8,20,12,.35)';g.lineWidth=372*RW;g.stroke();
+  g.strokeStyle='#4c5638';g.lineWidth=342*RW;g.stroke();
+  g.strokeStyle='#7d7650';g.lineWidth=316*RW;g.stroke();
+  g.strokeStyle='#5f5a3e';g.lineWidth=278*RW;g.stroke();      // wet sand
+  g.strokeStyle='#3d8a8c';g.lineWidth=262*RW;g.stroke();      // light shallows
+  g.strokeStyle='#2e7584';g.lineWidth=236*RW;g.stroke();
+  g.strokeStyle='#22617a';g.lineWidth=200*RW;g.stroke();
+  g.strokeStyle='#1b4d66';g.lineWidth=140*RW;g.stroke();      // deep channel
+  g.strokeStyle='rgba(120,200,225,.10)';g.lineWidth=70*RW;g.stroke();
+  // sand texture + pebbles on both banks
+  {const A=new Path2D(),B=new Path2D(),C=new Path2D();
+    for(let i=0;i<1400*K;i++){const s=rnd()<.5?1:-1,p=RV(rnd(),s*(134+rnd()*24)*RW);circ(rnd()<.5?A:B,p.x,p.y,1.5+rnd()*3)}
+    fillP(A,'rgba(220,205,150,.25)');fillP(B,'rgba(50,44,26,.25)');
+    const H=new Path2D();for(let i=0;i<110*K;i++){const s=rnd()<.5?1:-1,p=RV(rnd(),s*(132+rnd()*22)*RW),r=5+rnd()*9,a=rnd()*3;ell(C,p.x,p.y,r*1.3,r,a);ell(H,p.x-r*.3,p.y-r*.35,r*.55,r*.32,a)}
+    fillP(C,'#64604c');fillP(H,'rgba(255,255,235,.18)')}
+  // foam lines along the waterline (both banks), broken dashes + foam bubbles
+  for(const s of [1,-1])for(const [off,w,col,dash] of [[129,5,'rgba(230,248,255,.40)',[34,18,10,22]],[121,3,'rgba(220,245,255,.22)',[18,30]],[112,2.5,'rgba(200,240,255,.14)',[10,40]]]){
+    g.beginPath();for(let t=0;t<=1.0001;t+=.005){const p=RV(t,s*off*RW+Math.sin(t*140+s)*3);t?g.lineTo(p.x,p.y):g.moveTo(p.x,p.y)}
+    g.strokeStyle=col;g.lineWidth=w;g.setLineDash(dash);g.stroke();g.setLineDash([])}
+  {const F=new Path2D();for(let i=0;i<900*K;i++){const s=rnd()<.5?1:-1,p=RV(rnd(),s*(116+rnd()*16)*RW);circ(F,p.x,p.y,1.2+rnd()*2.2)}fillP(F,'rgba(235,250,255,.32)')}
+  // ripples & current streaks
+  {const P=new Path2D();for(let i=0;i<340*K;i++){const t=rnd(),p=RV(t,(rnd()-.5)*190*RW),l=10+rnd()*14;P.moveTo(p.x-l,p.y-l);P.quadraticCurveTo(p.x+4,p.y-2,p.x+l,p.y+l)}
+    g.strokeStyle='rgba(200,240,255,.15)';g.lineWidth=3;g.stroke(P)}
+  {const P=new Path2D();for(let i=0;i<120*K;i++){const t=rnd(),p=RV(t,(rnd()-.5)*90*RW),q=RV(t+.006+rnd()*.006,(rnd()-.5)*90*RW);P.moveTo(p.x,p.y);P.lineTo(q.x,q.y)}
+    g.strokeStyle='rgba(160,225,240,.10)';g.lineWidth=4;g.stroke(P)}
+  // lily pads in the calm shallows
+  {const P=new Path2D(),Q=new Path2D();for(let i=0;i<46*K;i++){const s=rnd()<.5?1:-1,p=RV(rnd(),s*(96+rnd()*14)*RW);if(laneD(p.x,p.y)<170)continue;
+    const r=7+rnd()*6,a=rnd()*TAU;P.moveTo(p.x,p.y);P.arc(p.x,p.y,r,a+.35,a+TAU-.1);P.closePath();if(rnd()<.3)circ(Q,p.x+r*.2,p.y-r*.2,2.6)}
+    fillP(P,'#3f7a3a');g.strokeStyle='rgba(20,50,25,.5)';g.lineWidth=1.5;g.stroke(P);fillP(Q,'rgba(250,215,235,.9)')}
+  // reeds & cattails near the banks (kept off lanes and bushes)
+  {const D=new Path2D(),L=new Path2D(),H=new Path2D();
+    for(let i=0;i<150*K;i++){const s=rnd()<.5?1:-1,p=RV(rnd(),s*(138+rnd()*30)*RW);if(laneD(p.x,p.y)<165||bushNear(p.x,p.y,40)||baseD(p.x,p.y)<BR+60)continue;
+      const n=5+(rnd()*7|0);for(let j=0;j<n;j++){const bx=p.x+rnd()*22-11,by=p.y+rnd()*14-7,h=16+rnd()*20,l=(rnd()-.5)*16,P=rnd()<.55?D:L;
+        P.moveTo(bx,by);P.quadraticCurveTo(bx+l*.3,by-h*.6,bx+l,by-h);if(rnd()<.25)ell(H,bx+l,by-h-3,2.2,5,Math.atan2(-h,l)+Math.PI/2)}}
+    g.lineWidth=2.4;g.strokeStyle='#2f5a2a';g.stroke(D);g.strokeStyle='#6c9a48';g.lineWidth=2;g.stroke(L);fillP(H,'#5a3a22')}
+
+  // ---------- 3. lanes: AO along edges, stone curbs, cobblestones, wear
+  const lanes=LANEK.map(k=>LANES[k]);
+  const sampleLane=(p,step,fn)=>{const L=pathLen(p);for(let d=0;d<=L;d+=step){const a=pathAt(p,d),b=pathAt(p,Math.min(L,d+2)),a0=d+2>L?pathAt(p,d-2):a,
+    ang=d+2>L?Math.atan2(a.y-a0.y,a.x-a0.x):Math.atan2(b.y-a.y,b.x-a.x);fn(a.x,a.y,ang,d,L)}};
+  for(const p of lanes){poly(p);g.strokeStyle='rgba(0,0,0,.16)';g.lineWidth=300;g.stroke()}
+  for(const p of lanes){poly(p);g.strokeStyle='rgba(0,0,0,.2)';g.lineWidth=262;g.stroke()}
+  for(const p of lanes){poly(p);g.strokeStyle='#33302a';g.lineWidth=244;g.stroke()}
+  for(const p of lanes){poly(p);g.strokeStyle='#7b7666';g.lineWidth=236;g.stroke()}
+  for(const p of lanes){poly(p);g.strokeStyle='#8f8a78';g.lineWidth=230;g.stroke()}
+  // curb block seams + weathering (drawn before the inner fill so they never spill into the road)
+  {const P=new Path2D(),M=new Path2D(),N=new Path2D();
+    for(const p of lanes)sampleLane(p,30,(x,y,a)=>{const nx=-Math.sin(a),ny=Math.cos(a),j=rnd()*6;
+      for(const s of [1,-1]){P.moveTo(x+nx*s*102+Math.cos(a)*j,y+ny*s*102+Math.sin(a)*j);P.lineTo(x+nx*s*119+Math.cos(a)*j,y+ny*s*119+Math.sin(a)*j);
+        for(let q=0;q<2;q++){const o=105+rnd()*11,t=rnd()*30-15;circ(rnd()<.5?M:N,x+nx*s*o+Math.cos(a)*t,y+ny*s*o+Math.sin(a)*t,1+rnd()*2.4)}}});
+    g.strokeStyle='rgba(38,34,28,.8)';g.lineWidth=2.6;g.stroke(P);fillP(M,'rgba(60,56,46,.45)');fillP(N,'rgba(200,196,175,.28)')}
+  for(const p of lanes){poly(p);g.strokeStyle='#463f31';g.lineWidth=214;g.stroke()}   // gutter shadow
+  for(const p of lanes){poly(p);g.strokeStyle='#8a7a58';g.lineWidth=206;g.stroke()}   // road bed
+  // cobblestones (bucketed into a few Path2Ds so this stays a handful of fills)
+  {const CB=[new Path2D(),new Path2D(),new Path2D(),new Path2D(),new Path2D()],SH=new Path2D(),HL=new Path2D();
+    const tones=['#9d8c66','#a99a74','#8f7f5c','#b3a37e','#857659'];
+    for(const p of lanes){let row=0;sampleLane(p,19,(x,y,a)=>{row++;const nx=-Math.sin(a),ny=Math.cos(a),tx=Math.cos(a),ty=Math.sin(a);
+      if(baseD(x,y)<BR-40||Math.hypot(x-S/2,y-S/2)<175*K-30)return;
+      for(let o=-92+(row&1?10:0);o<=93;o+=20){const jt=rnd()*5-2.5,jn=rnd()*4-2,cx=x+nx*(o+jn)+tx*jt,cy=y+ny*(o+jn)+ty*jt,rx=7.6+rnd()*2.4,ry=6+rnd()*2.4,ra=a+rnd()*.5-.25;
+        ell(SH,cx+1.6,cy+2.2,rx,ry,ra);ell(CB[(rnd()*5)|0],cx,cy,rx,ry,ra);if(rnd()<.6)ell(HL,cx-rx*.25,cy-ry*.3,rx*.45,ry*.3,ra)}})}
+    fillP(SH,'rgba(52,42,26,.55)');CB.forEach((P,i)=>fillP(P,tones[i]));fillP(HL,'rgba(255,245,215,.16)')}
+  // dirt/wear over the cobbles: worn centre, cart ruts, dirt patches, cracks
+  for(const p of lanes){poly(p);g.strokeStyle='rgba(120,98,62,.22)';g.lineWidth=96;g.stroke()}
+  for(const s of [1,-1]){for(const p of lanes){g.beginPath();let f=1;sampleLane(p,16,(x,y,a)=>{const X=x-Math.sin(a)*s*38,Y=y+Math.cos(a)*s*38;f?g.moveTo(X,Y):g.lineTo(X,Y);f=0});
+    g.strokeStyle='rgba(78,60,34,.16)';g.lineWidth=12;g.stroke()}}
+  {const A=new Path2D(),B=new Path2D();
+    for(const p of lanes)sampleLane(p,55,(x,y,a)=>{const nx=-Math.sin(a),ny=Math.cos(a);for(let q=0;q<3;q++){const o=rnd()*170-85,t=rnd()*40-20;
+      const X=x+nx*o+Math.cos(a)*t,Y=y+ny*o+Math.sin(a)*t;ell(rnd()<.6?A:B,X,Y,8+rnd()*22,5+rnd()*12,a+rnd()-.5)}});
+    fillP(A,'rgba(98,78,48,.20)');fillP(B,'rgba(255,240,200,.07)')}
+  // grass tufts poking out at the curb edge
+  {const P=new Path2D();for(const p of lanes)sampleLane(p,26,(x,y,a)=>{if(rnd()<.45)return;const s=rnd()<.5?1:-1,o=118+rnd()*8,X=x-Math.sin(a)*s*o,Y=y+Math.cos(a)*s*o;
+    if(laneD(X,Y)<112||baseD(X,Y)<BR)return;for(let j=0;j<4;j++){const bx=X+rnd()*10-5;P.moveTo(bx,Y);P.lineTo(bx+rnd()*6-3,Y-6-rnd()*7)}});
+    g.strokeStyle='rgba(120,170,80,.7)';g.lineWidth=2;g.stroke(P)}
+
+  // ---------- 4. centre plaza: tiled rings, rune inlay
+  {const cx=S/2,cy=S/2,R=178*K;
+    ao(cx,cy,R*1.35,.45);
+    g.fillStyle='#3e3a30';g.beginPath();g.arc(cx,cy,R+8,0,TAU);g.fill();
+    g.fillStyle='#77705e';g.beginPath();g.arc(cx,cy,R,0,TAU);g.fill();
+    const tiles=[new Path2D(),new Path2D(),new Path2D()],tc=['#857d68','#8f8772','#7b735f'];
+    for(let r0=40,ri=0;r0<R-6;r0+=26,ri++){const r1=Math.min(R-6,r0+26),n=Math.max(8,Math.round(TAU*r1/44)),off=ri&1?.5:0;
+      for(let i=0;i<n;i++){const a0=(i+off)/n*TAU+.008,a1=(i+1+off)/n*TAU-.008,P=tiles[(rnd()*3)|0];
+        P.moveTo(cx+Math.cos(a0)*(r0+1.5),cy+Math.sin(a0)*(r0+1.5));P.arc(cx,cy,r1-1.5,a0,a1);P.arc(cx,cy,r0+1.5,a1,a0,true);P.closePath()}}
+    tiles.forEach((P,i)=>fillP(P,tc[i]));
+    g.strokeStyle='rgba(190,160,255,.42)';g.lineWidth=6;g.beginPath();g.arc(cx,cy,R*.62,0,TAU);g.stroke();
+    g.strokeStyle='rgba(190,160,255,.22)';g.lineWidth=16;g.stroke();
+    g.beginPath();for(let i=0;i<=8;i++){const a=i*TAU*3/8;const x=cx+Math.cos(a)*R*.6,y=cy+Math.sin(a)*R*.6;i?g.lineTo(x,y):g.moveTo(x,y)}
+    g.strokeStyle='rgba(205,180,255,.30)';g.lineWidth=4;g.stroke();
+    g.fillStyle='rgba(200,180,255,.28)';g.beginPath();g.arc(cx,cy,34,0,TAU);g.fill();
+    g.strokeStyle='rgba(255,240,200,.25)';g.lineWidth=3;g.beginPath();g.arc(cx,cy,R-4,0,TAU);g.stroke()}
+
+  // ---------- 5. bases: tiled stone plaza, team inlays, fountain rune circle, nexus emblem
+  for(const team of [BLUE,RED]){const {x:cx,y:cy}=BC[team],tc=team===BLUE?'110,180,255':'255,120,110',tcd=team===BLUE?'40,80,140':'130,40,36';
+    ao(cx,cy,BR*1.22,.6);
+    const gr=g.createRadialGradient(cx,cy,BR*.9,cx,cy,BR*1.12);gr.addColorStop(0,team===BLUE?'rgba(60,78,104,.9)':'rgba(104,64,60,.9)');gr.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle=gr;g.beginPath();g.arc(cx,cy,BR*1.12,0,TAU);g.fill();
+    g.fillStyle='#2b2d33';g.beginPath();g.arc(cx,cy,BR+10,0,TAU);g.fill();           // outer wall shadow
+    g.fillStyle=team===BLUE?'#4f5a6a':'#6a5654';g.beginPath();g.arc(cx,cy,BR,0,TAU);g.fill();
+    // tiles: brick-bonded rings, tones bucketed; every 7th tile carries a team tint
+    const tones=team===BLUE?['#5c6879','#56616f','#636f80','#515b69']:['#796563','#715e5b','#7f6b68','#6a5856'],TP=tones.map(()=>new Path2D()),TT=new Path2D();
+    for(let r0=60,ri=0;r0<BR-14;r0+=34*K,ri++){const r1=Math.min(BR-14,r0+34*K),n=Math.max(10,Math.round(TAU*r1/(52*K))),off=ri&1?.5:0;
+      for(let i=0;i<n;i++){const a0=(i+off)/n*TAU+1.2/r1,a1=(i+1+off)/n*TAU-1.2/r1,P=(i*7+ri*3)%17===0?TT:TP[(rnd()*TP.length)|0];
+        P.moveTo(cx+Math.cos(a0)*(r0+1.6),cy+Math.sin(a0)*(r0+1.6));P.arc(cx,cy,r1-1.6,a0,a1);P.arc(cx,cy,r0+1.6,a1,a0,true);P.closePath()}}
+    TP.forEach((P,i)=>fillP(P,tones[i]));fillP(TT,`rgba(${tc},.38)`);
+    // stone speckle
+    {const A=new Path2D(),B=new Path2D();for(let i=0;i<900*K;i++){const a=rnd()*TAU,r=Math.sqrt(rnd())*(BR-14);circ(rnd()<.5?A:B,cx+Math.cos(a)*r,cy+Math.sin(a)*r,1+rnd()*2.2)}
+      fillP(A,'rgba(255,255,255,.07)');fillP(B,'rgba(0,0,0,.12)')}
+    // team inlay bands
+    g.strokeStyle=`rgba(${tcd},.9)`;g.lineWidth=14;g.beginPath();g.arc(cx,cy,BR-22,0,TAU);g.stroke();
+    g.strokeStyle=`rgba(${tc},.75)`;g.lineWidth=5;g.stroke();
+    g.strokeStyle=`rgba(${tc},.16)`;g.lineWidth=34;g.beginPath();g.arc(cx,cy,BR-22,0,TAU);g.stroke();
+    g.strokeStyle='#b89a5a';g.lineWidth=3;g.beginPath();g.arc(cx,cy,BR-4,0,TAU);g.stroke();          // gilded rim
+    g.strokeStyle=`rgba(${tc},.35)`;g.lineWidth=4;g.beginPath();g.arc(cx,cy,BR*.55,0,TAU);g.stroke();
+    // chevrons pointing out along each lane mouth
+    for(const k of LANEK){const p=LANEP[team][k];let d=0;while(d<1500*K&&Math.hypot(pathAt(p,d).x-cx,pathAt(p,d).y-cy)<BR*.62)d+=10;
+      for(let j=0;j<3;j++){const a=pathAt(p,d+j*42),b=pathAt(p,d+j*42+6),ang=Math.atan2(b.y-a.y,b.x-a.x);
+        if(Math.hypot(a.x-cx,a.y-cy)>BR-40)break;
+        g.save();g.translate(a.x,a.y);g.rotate(ang);g.beginPath();g.moveTo(-14,-34);g.lineTo(12,0);g.lineTo(-14,34);
+        g.strokeStyle=`rgba(${tcd},.9)`;g.lineWidth=12;g.stroke();g.strokeStyle=`rgba(${tc},${.8-j*.2})`;g.lineWidth=5;g.stroke();g.restore()}}
+    // fountain: team-glow disc, rune circle with ticks (3D pillars stand on the 165*K ring)
+    const F=FOUNT[team],FR=200*K;
+    ao(F.x,F.y,FR*1.1,.35);
+    const fg=g.createRadialGradient(F.x,F.y,20,F.x,F.y,FR);fg.addColorStop(0,`rgba(${tc},.45)`);fg.addColorStop(.75,`rgba(${tc},.16)`);fg.addColorStop(1,`rgba(${tc},0)`);
+    g.fillStyle=fg;g.beginPath();g.arc(F.x,F.y,FR,0,TAU);g.fill();
+    g.strokeStyle=`rgba(${tc},.6)`;g.lineWidth=5;g.beginPath();g.arc(F.x,F.y,136*K,0,TAU);g.stroke();
+    g.lineWidth=2.5;g.beginPath();g.arc(F.x,F.y,118*K,0,TAU);g.stroke();
+    g.beginPath();for(let i=0;i<36;i++){const a=i/36*TAU,r0=118*K,r1=i%3?126*K:134*K;g.moveTo(F.x+Math.cos(a)*r0,F.y+Math.sin(a)*r0);g.lineTo(F.x+Math.cos(a)*r1,F.y+Math.sin(a)*r1)}g.stroke();
+    g.strokeStyle='rgba(255,255,255,.18)';g.lineWidth=2;g.beginPath();g.arc(F.x,F.y,165*K,0,TAU);g.stroke();
+    // nexus emblem: dark socket, 8-point star, team rings
+    const N=NEXUS[team];ao(N.x,N.y,150,.5);
+    g.fillStyle='rgba(26,26,36,.55)';g.beginPath();g.arc(N.x,N.y,124,0,TAU);g.fill();
+    g.beginPath();for(let i=0;i<16;i++){const a=i/16*TAU,r=i&1?70:132;i?g.lineTo(N.x+Math.cos(a)*r,N.y+Math.sin(a)*r):g.moveTo(N.x+r,N.y)}g.closePath();
+    g.fillStyle=`rgba(${tc},.20)`;g.fill();g.strokeStyle=`rgba(${tc},.6)`;g.lineWidth=3;g.stroke();
+    g.strokeStyle=`rgba(${tc},.55)`;g.lineWidth=6;g.beginPath();g.arc(N.x,N.y,124,0,TAU);g.stroke();
+    g.strokeStyle='#b89a5a';g.lineWidth=2.5;g.beginPath();g.arc(N.x,N.y,104,0,TAU);g.stroke()}
+
+  // ---------- 6. tower pads: octagonal paved pads with team rim
+  const pad=(x,y,R,team)=>{const tc=team===BLUE?'110,180,255':'255,120,110';ao(x,y,R*1.5,.45);
+    const oct=r=>{g.beginPath();for(let i=0;i<8;i++){const a=(i+.5)/8*TAU;i?g.lineTo(x+Math.cos(a)*r,y+Math.sin(a)*r):g.moveTo(x+Math.cos(a)*r,y+Math.sin(a)*r)}g.closePath()};
+    oct(R+6);g.fillStyle='#2e2c28';g.fill();oct(R);g.fillStyle='#6d6a62';g.fill();
+    g.strokeStyle='rgba(40,38,34,.7)';g.lineWidth=2.5;g.beginPath();
+    for(let i=0;i<8;i++){const a=(i+.5)/8*TAU;g.moveTo(x+Math.cos(a)*R*.45,y+Math.sin(a)*R*.45);g.lineTo(x+Math.cos(a)*R,y+Math.sin(a)*R)}g.stroke();
+    oct(R*.45);g.fillStyle='#5c5953';g.fill();g.stroke();
+    oct(R-5);g.strokeStyle=`rgba(${tc},.55)`;g.lineWidth=4;g.stroke()};
+  for(const team of [BLUE,RED]){for(const k of LANEK)for(const d of TOWER_D[k]){const p=pathAt(LANEP[team][k],d);pad(p.x,p.y,80,team)}
+    const b=BASET[team];pad(b.x,b.y,84,team)}
+
+  // ---------- 7. jungle camp clearings: packed dirt, footprints, scorch/rune for bosses, rim stones
+  for(const c of CAMPS){const boss=c.type==='colossus'||c.type==='drake',R=(boss?175:112)*Math.min(K,1.15);
+    const gr=g.createRadialGradient(c.x,c.y,R*.2,c.x,c.y,R*1.12);gr.addColorStop(0,'rgba(92,72,46,.9)');gr.addColorStop(.7,'rgba(74,58,38,.8)');gr.addColorStop(1,'rgba(50,40,26,0)');
+    g.fillStyle=gr;g.beginPath();g.arc(c.x,c.y,R*1.12,0,TAU);g.fill();
+    {const A=new Path2D(),B=new Path2D();for(let i=0;i<(boss?260:140);i++){const a=rnd()*TAU,r=Math.sqrt(rnd())*R;circ(rnd()<.5?A:B,c.x+Math.cos(a)*r,c.y+Math.sin(a)*r,1.2+rnd()*3)}
+      fillP(A,'rgba(150,125,85,.35)');fillP(B,'rgba(30,22,12,.35)')}
+    if(c.type==='drake'){const sg=g.createRadialGradient(c.x,c.y,0,c.x,c.y,R*.75);sg.addColorStop(0,'rgba(20,10,6,.55)');sg.addColorStop(1,'rgba(20,10,6,0)');g.fillStyle=sg;g.beginPath();g.arc(c.x,c.y,R*.75,0,TAU);g.fill();
+      g.strokeStyle='rgba(240,120,60,.30)';g.lineWidth=3;g.beginPath();for(let i=0;i<9;i++){const a=rnd()*TAU,r0=R*.15,r1=R*(.5+rnd()*.35);g.moveTo(c.x+Math.cos(a)*r0,c.y+Math.sin(a)*r0);g.lineTo(c.x+Math.cos(a+.2)*r1*.6,c.y+Math.sin(a+.2)*r1*.6);g.lineTo(c.x+Math.cos(a)*r1,c.y+Math.sin(a)*r1)}g.stroke()}
+    if(c.type==='colossus'){g.strokeStyle='rgba(185,175,235,.32)';g.lineWidth=5;g.beginPath();g.arc(c.x,c.y,R*.62,0,TAU);g.stroke();
+      g.lineWidth=2.5;g.beginPath();for(let i=0;i<6;i++){const a=i/6*TAU;g.moveTo(c.x+Math.cos(a)*R*.62,c.y+Math.sin(a)*R*.62);g.lineTo(c.x+Math.cos(a+TAU/3)*R*.62,c.y+Math.sin(a+TAU/3)*R*.62)}g.stroke()}
+    // footprints: paws (wolf/drake claws) or broad stone feet (golem/colossus), in short trails
+    {const P=new Path2D(),stone=c.type==='golem'||c.type==='colossus',sz=stone?(boss?1.6:1.15):(boss?1.4:1);
+      for(let tr=0;tr<(boss?5:4);tr++){let a=rnd()*TAU,r=R*(.25+rnd()*.5),x=c.x+Math.cos(a)*r,y=c.y+Math.sin(a)*r,h=rnd()*TAU;
+        for(let s=0;s<5;s++){const side=s&1?1:-1,px=x-Math.sin(h)*side*7*sz,py=y+Math.cos(h)*side*7*sz;
+          if(stone){ell(P,px,py,8*sz,5.5*sz,h)}else{ell(P,px,py,4*sz,3.4*sz,h);for(let t=-1;t<=1;t++)circ(P,px+Math.cos(h+t*.55)*6.5*sz,py+Math.sin(h+t*.55)*6.5*sz,1.6*sz)}
+          x+=Math.cos(h)*18*sz;y+=Math.sin(h)*18*sz;h+=rnd()*.5-.25}}
+      fillP(P,'rgba(32,22,12,.5)')}
+    // scattered bones (wolves) / pebbles
+    if(c.type==='wolf'){g.strokeStyle='rgba(225,215,190,.6)';g.lineWidth=3;g.beginPath();for(let i=0;i<4;i++){const a=rnd()*TAU,r=R*(.3+rnd()*.5),x=c.x+Math.cos(a)*r,y=c.y+Math.sin(a)*r,h=rnd()*TAU;g.moveTo(x-Math.cos(h)*9,y-Math.sin(h)*9);g.lineTo(x+Math.cos(h)*9,y+Math.sin(h)*9)}g.stroke()}
+    const RS=new Path2D(),RH=new Path2D(),RD=new Path2D();
+    for(let i=0;i<(boss?11:7);i++){const a=i/(boss?11:7)*TAU+rnd()*.3,x=c.x+Math.cos(a)*(R+8),y=c.y+Math.sin(a)*(R+8),r=10+rnd()*10;
+      ell(RD,x+3,y+4,r*1.25,r*.9,a);ell(RS,x,y,r*1.2,r*.85,a);ell(RH,x-r*.3,y-r*.3,r*.45,r*.3,0)}
+    fillP(RD,'rgba(10,14,10,.45)');fillP(RS,'#4f524d');fillP(RH,'rgba(255,255,255,.14)')}
+
+  // ---------- 8. faint dirt trails from camps to the nearest lane
+  {const P=new Path2D();for(const c of CAMPS){let best=null,bd=1e9;for(const k of LANEK){const p=LANES[k],L=pathLen(p);for(let d=0;d<L;d+=40){const q=pathAt(p,d),dd=Math.hypot(q.x-c.x,q.y-c.y);if(dd<bd){bd=dd;best=q}}}
+    if(!best||bd>700*K)continue;const mx=(c.x+best.x)/2+(rnd()-.5)*80,my=(c.y+best.y)/2+(rnd()-.5)*80;P.moveTo(c.x,c.y);P.quadraticCurveTo(mx,my,best.x,best.y)}
+    g.save();g.setLineDash([22,14]);g.strokeStyle='rgba(84,66,40,.28)';g.lineWidth=26;g.stroke(P);g.setLineDash([]);g.restore()}
+
+  // ---------- 9. jungle decor: trees and rocks (3D: placements + contact AO) ; grass detail
+  const nTry=Math.round(700*K*K);
+  for(let i=0;i<nTry;i++){const x=60+rnd()*(S-120),y=60+rnd()*(S-120);
+    if(laneD(x,y)<175||riverD(x,y)<190*K||baseD(x,y)<BR+140||campD(x,y)<200*Math.min(K,1.15)||bushNear(x,y,90)||Math.hypot(x-S/2,y-S/2)<260*K)continue;
     if(map_FRUITS.some(f=>Math.hypot(x-f.x,y-f.y)<120))continue;
     if(map_3D){const tr=rnd()<.7,r=tr?24+rnd()*30:12+rnd()*18;map_DECOR.push({x,y,r,kind:tr?'tree':'rock',s:rnd()});
-      g.fillStyle='rgba(5,15,10,.35)';g.beginPath();g.ellipse(x,y,r*1.1,r*.9,0,0,TAU);g.fill();continue}
+      ao(x+4,y+5,r*(tr?1.7:1.5),tr?.42:.36);ao(x+2,y+2,r*1.0,.3);continue}
     if(rnd()<.7){const r=24+rnd()*30;
-      g.fillStyle='rgba(5,15,10,.45)';g.beginPath();g.arc(x+10,y+12,r,0,TAU);g.fill();
+      ao(x+10,y+12,r*1.6,.6);
       g.fillStyle='#183a33';g.beginPath();g.arc(x,y,r,0,TAU);g.fill();
       g.fillStyle='#21483d';g.beginPath();g.arc(x-r*.15,y-r*.2,r*.72,0,TAU);g.fill();
       g.fillStyle='rgba(150,210,180,.14)';g.beginPath();g.arc(x-r*.35,y-r*.35,r*.35,0,TAU);g.fill()}
-    else{const r=12+rnd()*18;g.fillStyle='#1d2a24';g.beginPath();g.ellipse(x+4,y+6,r*1.2,r*.8,0,0,TAU);g.fill();g.fillStyle='#6a706b';g.beginPath();g.ellipse(x,y,r*1.2,r*.8,0,0,TAU);g.fill();g.fillStyle='rgba(255,255,255,.14)';g.beginPath();g.ellipse(x-r*.3,y-r*.25,r*.5,r*.3,0,0,TAU);g.fill()}}
-  // flowers / grass tufts sprinkled in jungle
-  for(let i=0;i<500;i++){const x=rnd()*S,y=rnd()*S;if(laneD(x,y)<130||riverD(x,y)<170||baseD(x,y)<650)continue;
-    g.fillStyle=['rgba(240,220,120,.55)','rgba(230,150,190,.5)','rgba(220,240,255,.45)'][i%3];g.beginPath();g.arc(x,y,3+rnd()*2,0,TAU);g.fill()}
-  // --- bushes (草丛): bright, outlined, leafy — readable at phone size
+    else{const r=12+rnd()*18;ao(x+4,y+6,r*1.5,.5);g.fillStyle='#6a706b';g.beginPath();g.ellipse(x,y,r*1.2,r*.8,0,0,TAU);g.fill();g.fillStyle='rgba(255,255,255,.14)';g.beginPath();g.ellipse(x-r*.3,y-r*.25,r*.5,r*.3,0,0,TAU);g.fill()}}
+  // fallen leaves / needles under tree clusters
+  if(map_3D){const A=new Path2D(),B=new Path2D();for(const d of map_DECOR){if(d.kind!=='tree')continue;for(let j=0;j<6;j++){const a=rnd()*TAU,r=d.r*(.8+rnd()*1.2);ell(rnd()<.5?A:B,d.x+Math.cos(a)*r,d.y+Math.sin(a)*r,3.5,1.8,rnd()*3)}}
+    fillP(A,'rgba(140,120,60,.45)');fillP(B,'rgba(60,90,50,.5)')}
+  const openGrass=(x,y,pl,pr)=>laneD(x,y)>pl&&riverD(x,y)>pr&&baseD(x,y)>BR+30&&campD(x,y)>130;
+  // small stones
+  {const D=new Path2D(),A=new Path2D(),H=new Path2D();for(let i=0;i<900*K*K;i++){const x=rnd()*S,y=rnd()*S;if(!openGrass(x,y,130,175*K))continue;
+    const r=2.5+rnd()*5,a=rnd()*3;ell(D,x+1.5,y+2,r*1.3,r,a);ell(A,x,y,r*1.3,r,a);ell(H,x-r*.3,y-r*.35,r*.5,r*.3,a)}
+    fillP(D,'rgba(10,20,12,.45)');fillP(A,'#717a70');fillP(H,'rgba(255,255,255,.2)')}
+  // flower clusters (clumped, several species)
+  {const cols=['#f0d870','#e898c0','#e4f0ff','#c9a8ff','#ffb070'],FP=cols.map(()=>new Path2D()),CEN=new Path2D(),LV=new Path2D();
+    for(let i=0;i<260*K*K;i++){const cx=rnd()*S,cy=rnd()*S;if(!openGrass(cx,cy,140,190*K)||bushNear(cx,cy,30))continue;
+      const sp=(rnd()*cols.length)|0,n=5+(rnd()*10|0);
+      for(let j=0;j<n;j++){const x=cx+(rnd()-.5)*60,y=cy+(rnd()-.5)*44,r=2.2+rnd()*1.6;ell(LV,x+3,y+3,4,1.8,rnd()*3);
+        for(let q=0;q<5;q++){const a=q/5*TAU;circ(FP[sp],x+Math.cos(a)*r,y+Math.sin(a)*r,r*.75)}circ(CEN,x,y,r*.5)}}
+    fillP(LV,'rgba(40,90,40,.7)');FP.forEach((P,i)=>fillP(P,cols[i]));fillP(CEN,'rgba(255,220,90,.9)')}
+  // mushrooms near tree bases
+  if(map_3D){const C=new Path2D(),D=new Path2D();for(const d of map_DECOR){if(d.kind!=='tree'||rnd()<.75)continue;const a=rnd()*TAU,x=d.x+Math.cos(a)*d.r*1.1,y=d.y+Math.sin(a)*d.r*1.1;
+    for(let j=0;j<3;j++){const X=x+rnd()*12-6,Y=y+rnd()*8-4;circ(C,X,Y,2.6+rnd()*1.5);circ(D,X-.8,Y-.8,.9)}}fillP(C,'#c8563f');fillP(D,'rgba(255,240,220,.9)')}
+
+  // ---------- 10. bushes (草丛): bright, outlined, leafy — readable at phone size
   for(const b of map_bushes){
+    ao(b.x+6,b.y+8,Math.max(b.rx,b.ry)*1.35,.5);
     g.save();g.translate(b.x,b.y);g.rotate(b.a);
-    g.fillStyle='rgba(5,20,8,.45)';g.beginPath();g.ellipse(8,10,b.rx+10,b.ry+10,0,0,TAU);g.fill();
     g.fillStyle='#173f1c';g.beginPath();g.ellipse(0,0,b.rx+8,b.ry+8,0,0,TAU);g.fill();
     g.fillStyle='#3a7a34';g.beginPath();g.ellipse(0,0,b.rx,b.ry,0,0,TAU);g.fill();
-    // scalloped edge clumps
     const n=Math.round((b.rx+b.ry)/9);
     for(let i=0;i<n;i++){const a=i/n*TAU,x=Math.cos(a)*b.rx*.86,y=Math.sin(a)*b.ry*.8,r=Math.min(b.ry,32)*.62+rnd()*6;
       g.fillStyle='#204f22';g.beginPath();g.arc(x+3,y+4,r,0,TAU);g.fill();
       g.fillStyle=rnd()<.5?'#4a913f':'#3f8638';g.beginPath();g.arc(x,y,r,0,TAU);g.fill()}
-    // leaf blades
     const m=Math.round(b.rx*b.ry/260);
     for(let i=0;i<m;i++){let x,y;do{x=(rnd()*2-1)*b.rx;y=(rnd()*2-1)*b.ry}while(x*x/(b.rx*b.rx)+y*y/(b.ry*b.ry)>.8);
       const la=rnd()*TAU,ll=10+rnd()*9;
@@ -1538,17 +1728,28 @@ function buildGround(){
     g.strokeStyle='rgba(190,240,140,.35)';g.lineWidth=3;g.beginPath();g.ellipse(0,0,b.rx+8,b.ry+8,0,0,TAU);g.stroke();
     g.restore();
   }
-  // --- river fruit pads
-  for(const f of map_FRUITS){g.fillStyle='rgba(40,80,50,.55)';g.beginPath();g.arc(f.x,f.y,34,0,TAU);g.fill();g.strokeStyle='rgba(150,240,170,.35)';g.lineWidth=4;g.stroke()}
-  // --- border
-  g.strokeStyle='#0d1a12';g.lineWidth=70;g.strokeRect(0,0,S,S);
-  g.strokeStyle='rgba(13,26,18,.5)';g.lineWidth=140;g.strokeRect(0,0,S,S);
+  // ---------- 11. river fruit pads
+  for(const f of map_FRUITS){ao(f.x,f.y,52,.35);g.fillStyle='rgba(40,80,50,.6)';g.beginPath();g.arc(f.x,f.y,34,0,TAU);g.fill();g.strokeStyle='rgba(150,240,170,.4)';g.lineWidth=4;g.stroke();
+    g.strokeStyle='rgba(150,240,170,.18)';g.lineWidth=2;g.beginPath();g.arc(f.x,f.y,46,0,TAU);g.stroke()}
+  // ---------- 12. border: dark vignette into the out-of-bounds plane
+  {const E=150;for(const [x0,y0,x1,y1,rx,ry,rw,rh] of [[0,0,E,0,0,0,E,S],[S,0,S-E,0,S-E,0,E,S],[0,0,0,E,0,0,S,E],[0,S,0,S-E,0,S-E,S,E]]){
+    const gr=g.createLinearGradient(x0,y0,x1,y1);gr.addColorStop(0,'rgba(8,18,12,1)');gr.addColorStop(.4,'rgba(8,18,12,.65)');gr.addColorStop(1,'rgba(8,18,12,0)');g.fillStyle=gr;g.fillRect(rx,ry,rw,rh)}}
+  // ---------- 13. fine grain at texture resolution (one tiled noise pattern)
+  {const n=document.createElement('canvas');n.width=n.height=128;const ng=n.getContext('2d');
+    if(ng.createImageData){const id=ng.createImageData(128,128),d=id.data;for(let i=0;i<d.length;i+=4){const v=rnd()<.5?0:255;d[i]=d[i+1]=d[i+2]=v;d[i+3]=(rnd()*22)|0}ng.putImageData(id,0,0);
+      g.setTransform(1,0,0,1,0,0);g.fillStyle=g.createPattern(n,'repeat');g.fillRect(0,0,PX,PX)}}
   GROUND=c;
-  const mc=document.createElement('canvas');mc.width=mc.height=220;const mg=mc.getContext('2d');mg.drawImage(c,0,0,220,220);
-  // minimap: emphasize bushes so they read at tiny size
-  const k=220/S;mg.fillStyle='rgba(110,200,90,.85)';
+  // ---------- minimap: two-step downscale (avoids sparkle), then emphasize lanes/river/bushes
+  const MS=220,mid=document.createElement('canvas');mid.width=mid.height=640;mid.getContext('2d').drawImage(c,0,0,640,640);
+  const mc=document.createElement('canvas');mc.width=mc.height=MS;const mg=mc.getContext('2d');mg.drawImage(mid,0,0,MS,MS);
+  const k=MS/S;mg.lineCap=mg.lineJoin='round';
+  mg.beginPath();{const a=RV(0,0);mg.moveTo(a.x*k,a.y*k);for(let t=.02;t<=1.0001;t+=.02){const p=RV(t,0);mg.lineTo(p.x*k,p.y*k)}}
+  mg.strokeStyle='rgba(70,150,190,.55)';mg.lineWidth=200*K*k;mg.stroke();
+  for(const p of lanes){mg.beginPath();mg.moveTo(p[0][0]*k,p[0][1]*k);for(let i=1;i<p.length;i++)mg.lineTo(p[i][0]*k,p[i][1]*k);mg.strokeStyle='rgba(205,185,135,.75)';mg.lineWidth=150*k;mg.stroke()}
+  mg.fillStyle='rgba(110,200,90,.85)';
   for(const b of map_bushes){mg.save();mg.translate(b.x*k,b.y*k);mg.rotate(b.a);mg.beginPath();mg.ellipse(0,0,b.rx*k,b.ry*k,0,0,TAU);mg.fill();mg.restore()}
   MINI=mc;
+  map_groundMs=typeof performance!=='undefined'?performance.now()-T0:0;
 }
 </script>
 <script>
@@ -1706,7 +1907,7 @@ function aiShop(h){
   if(h.ai_noShopT>G.time)return;
   for(let k=0;k<3;k++){
     const it=nextBuild(h);if(!it||h.gold<it.p){h.ai_needShop=false;return}
-    if(!buyItem(h,it.id)){h.ai_needShop=true;if(d2(h.x,h.y,FOUNT[h.team].x,FOUNT[h.team].y)<500*500){h.ai_needShop=false;h.ai_noShopT=G.time+30}return}
+    if(!buyItem(h,it.id)){h.ai_needShop=true;if(d2(h.x,h.y,FOUNT[h.team].x,FOUNT[h.team].y)<(500*MAPK)**2){h.ai_needShop=false;h.ai_noShopT=G.time+30}return}
   }
 }
 
@@ -1852,7 +2053,7 @@ function ai_pickTarget(h,c,L,reach){
   }
   for(const e of c.vis){
     if(e.invulnT>0)continue;const dd=dist(h,e);if(dd>reach)continue;
-    if(d2(e.x,e.y,FOUNT[e.team].x,FOUNT[e.team].y)<820*820)continue;
+    if(d2(e.x,e.y,FOUNT[e.team].x,FOUNT[e.team].y)<(820*MAPK)**2)continue;
     let sc=dd*.7+ai_ehp(e)*.22*L.focus-(AI_PRIO[ai_cls(e)]||.5)*200*L.focus;
     if(e.hp/e.maxHp<.3)sc-=250*L.focus;
     if(e===h.ai_tgt)sc-=140;
@@ -1896,7 +2097,7 @@ function heroAI(h,dt){
 }
 // never walk into the enemy fountain
 function ai_guard(h){
-  const EF=FOUNT[1-h.team],R=780;
+  const EF=FOUNT[1-h.team],R=780*MAPK;
   if(d2(h.x,h.y,EF.x,EF.y)<R*R){const a=Math.atan2(h.y-EF.y,h.x-EF.x);ai_move(h,EF.x+Math.cos(a)*(R+200),EF.y+Math.sin(a)*(R+200));return}
   const o=h.order;if(!o)return;let px,py;
   if(o.type==='move'){px=o.x;py=o.y}
@@ -1906,7 +2107,7 @@ function ai_guard(h){
 
 function ai_think(h){
   const L=ai_lv(h.team),c=ai_ctx(h.team),F=FOUNT[h.team];
-  const hr=h.hp/h.maxHp,atBase=d2(h.x,h.y,F.x,F.y)<420*420,cls=ai_cls(h);
+  const hr=h.hp/h.maxHp,atBase=d2(h.x,h.y,F.x,F.y)<(420*MAPK)**2,cls=ai_cls(h);
   aiShop(h);
   if(!h.ai_lane)h.ai_lane=h.lane;
   if(G.time>480&&h.lane==='top'&&!h.ai_mv1){h.ai_mv1=true;h.ai_lane='mid'}
@@ -1924,7 +2125,7 @@ function ai_think(h){
       if(ne&&ned<750){if(h.recallT>0)h.recallT=0;if(ned<520){ai_escapeSkills(h,ne,L);ai_spellDefend(h,ne,L)}
         const s=ai_safe(h);ai_move(h,s.x,s.y);if(ai_dodge(h,L))return;return}
       if(h.recallT>0)return;
-      if(G.time-(h.ai_hurtT||-9)>1.5&&dist(h,F)>1000&&!(ne&&ned<1100)){startRecall(h);return}
+      if(G.time-(h.ai_hurtT||-9)>1.5&&dist(h,F)>1000*MAPK&&!(ne&&ned<1100)){startRecall(h);return}
       ai_move(h,F.x,F.y);return;
     }
   }
@@ -1958,7 +2159,7 @@ function ai_think(h){
     if(fb){ai_move(h,fb.x,fb.y);return}
   }
   // recall to heal/shop when safe
-  if(!atBase&&!(ne&&ned<1300)&&G.time-(h.ai_hurtT||-9)>3&&dist(h,F)>1500){
+  if(!atBase&&!(ne&&ned<1300)&&G.time-(h.ai_hurtT||-9)>3&&dist(h,F)>1500*MAPK){
     const it=h.ai_needShop?nextBuild(h):null;
     if(hr<.45||(it&&h.gold>=it.p+150)||(h.ai_needShop&&h.gold>2200)){h.state='retreat';startRecall(h);return}
   }
@@ -2010,7 +2211,7 @@ function ai_think(h){
   const plan=c.plan,pt=c.ptgt;
   if(plan==='defend'&&pt&&pt.alive){
     const dd=dist(h,pt);
-    if(pt.kind==='nexus'||pt.tier==='base'||dd<2000||h.ai_lane===pt.lane){
+    if(pt.kind==='nexus'||pt.tier==='base'||dd<2000*MAPK||h.ai_lane===pt.lane){
       if(dd>650){const a=angTo(pt,NEXUS[h.team]);ai_move(h,pt.x+Math.cos(a)*120,pt.y+Math.sin(a)*120);return}
       if(ai_farm(h,c,L,mins,inc,true))return;
     }
@@ -2030,7 +2231,7 @@ function ai_think(h){
   if(ai_roamer(h)&&h.level>=3&&hr>.6&&G.time>150&&plan!=='defend'){
     if(!h.ai_gank&&G.time>(h.ai_gankT||0)){h.ai_gankT=G.time+4;
       if(Math.random()<L.gank*.6){let best=null,bs=1e9;
-        for(const e of c.vis){const dd=dist(h,e);if(dd<900||dd>1900)continue;const er=e.hp/e.maxHp;
+        for(const e of c.vis){const dd=dist(h,e);if(dd<900||dd>1900*MAPK)continue;const er=e.hp/e.maxHp;
           const help=ai_alliesNear(h.team,e.x,e.y,900,h);const ex=!ai_towerAt(e.x,e.y,h.team,150);
           if(!(er<.55||(ex&&help>=1)))continue;if(ai_visNear(c,e.x,e.y,900)>help+1)continue;
           const sc=dd+er*800-help*300;if(sc<bs){bs=sc;best=e}}
@@ -2047,7 +2248,7 @@ function ai_think(h){
   // jungle camps when lane is empty
   if(h.level>=4&&hr>.6&&!(ne&&ned<1100)){
     let m=null,md=1e9;
-    for(const cp of G.camps){const u=cp.unit;if(!u||!u.alive||u.boss)continue;const dd=dist(h,u);if(dd<md&&dd<1000){md=dd;m=u}}
+    for(const cp of G.camps){const u=cp.unit;if(!u||!u.alive||u.boss)continue;const dd=dist(h,u);if(dd<md&&dd<1000*MAPK){md=dd;m=u}}
     const f=ai_laneFront(h,h.ai_lane);
     if(m&&(!f.wave||dist(h,f)>900||mins.length===0)&&!(f.wave&&dist(f,h)<600)){h.order={type:'attack',t:m};aiSkills(h,m,c,L,'fight',null);return}
   }
@@ -2153,10 +2354,13 @@ function resize(){
   const ang=[180,135,90],dd=110*s;HUD.sk=ang.map(a=>({x:HUD.atk.x+Math.cos(a*Math.PI/180)*dd,y:HUD.atk.y-Math.sin(a*Math.PI/180)*dd,r:33*s}));
   HUD.sk.push({x:HUD.atk.x-Math.cos(22*Math.PI/180)*205*s,y:HUD.atk.y-Math.sin(22*Math.PI/180)*205*s,r:37*s});
   HUD.spell={x:HUD.atk.x-200*s,y:HUD.atk.y+20*s,r:27*s};
+  {const A=HUD.atk,pol=(deg,d)=>({x:A.x+Math.cos(deg*Math.PI/180)*d*s,y:A.y+Math.sin(deg*Math.PI/180)*d*s});
+   HUD.lh=Object.assign(pol(152,78),{r:21*s});   // 打兵（补刀）: left-below of attack
+   HUD.tw=Object.assign(pol(-62,80),{r:21*s});} // 推塔: above-right of attack
   HUD.recall={x:HUD.atk.x-268*s,y:H-INS.b-28*s,r:23*s};
   HUD.cancel={x:W-INS.r-56*s,y:Math.max(INS.t+110,HUD.atk.y-235*s),r:30*s};
   HUD.joy={x:INS.l+36+66*s,y:H-INS.b-34-66*s,R:62*s};
-  HUD.mm=Math.round(clamp(Math.min(W,H)*.3,96,170));
+  HUD.mm=Math.round(clamp(Math.min(W,H)*.36,110,200));
   HUD.fs=clamp(Math.min(W,H)/390,.9,1.25);
   document.documentElement.style.setProperty('--qbx',(INS.l+8+HUD.mm+10)+'px');
   // cached edge-vignette (red), drawn with globalAlpha: no per-frame gradients
@@ -2268,6 +2472,21 @@ function drawUnit(u){
     if(u.stun>0)drawStars(x,y-r-10);
   }
 }
+// 攻击目标标识: red ring under + bouncing arrow above the unit the player is attacking
+function ui_targetMark(){
+  const h=G.player;if(!h.alive)return;
+  let t=h.manual&&h.manual.alive?h.manual:(h.order&&h.order.type==='attack'&&h.order.t&&h.order.t.alive?h.order.t:null);
+  if(!t||!ui_seen(t))return;
+  const md=P.atkMode||'hero',c=md==='minion'?'143,209,106':md==='tower'?'255,176,102':'255,80,70';
+  const pr=.5+.5*Math.sin(G.time*8),R=(t.r||30)*(isStruct(t)?1.15:1.35)+6;
+  ctx.strokeStyle=`rgba(${c},.95)`;ctx.lineWidth=4;ctx.setLineDash([R*.5,R*.28]);ctx.lineDashOffset=-G.time*60;
+  ctx.beginPath();ctx.arc(t.x,t.y,R,0,TAU);ctx.stroke();ctx.setLineDash([]);ctx.lineDashOffset=0;
+  ctx.fillStyle=`rgba(${c},.16)`;ctx.beginPath();ctx.arc(t.x,t.y,R,0,TAU);ctx.fill();
+  const top=ui_3d?ui_hy(r3_top(t)+38+pr*12):(t.r+40+pr*8),ax=t.x,ay=t.y-top,sz=16;
+  ctx.fillStyle=`rgb(${c})`;ctx.strokeStyle='rgba(0,0,0,.7)';ctx.lineWidth=3;
+  ctx.save();ctx.translate(ax,ay);if(ui_3d)ctx.scale(1,1/ui_SE);
+  ctx.beginPath();ctx.moveTo(-sz,-sz*1.1);ctx.lineTo(sz,-sz*1.1);ctx.lineTo(0,sz*.4);ctx.closePath();ctx.stroke();ctx.fill();ctx.restore();
+}
 function drawStars(x,y){ctx.fillStyle='#ffe066';for(let i=0;i<3;i++){const a=G.time*5+i*TAU/3;ctx.beginPath();ctx.arc(x+Math.cos(a)*16,y+Math.sin(a)*5,4.5,0,TAU);ctx.fill()}}
 function drawBars(){
   ctx.setTransform(DPR,0,0,DPR,0,0);
@@ -2364,7 +2583,7 @@ function render(){
   const vx0=cam.x-W/2/Z-150,vx1=cam.x+W/2/Z+150,vy0=cam.y-H/2/Z/ui_SE-200,vy1=cam.y+H/2/Z/ui_SE+(ui_3d?350:150);
   const vis=u=>u.x>vx0&&u.x<vx1&&u.y>vy0&&u.y<vy1;
   // fountain glow
-  for(const t of [BLUE,RED]){const F=FOUNT[t];if(F.x<vx0-200||F.x>vx1+200||F.y<vy0-200||F.y>vy1+200)continue;ctx.strokeStyle=TEAMC[t];ctx.globalAlpha=.25+.1*Math.sin(G.time*2);ctx.lineWidth=6;ctx.beginPath();ctx.arc(F.x,F.y,200,0,TAU);ctx.stroke();ctx.globalAlpha=1}
+  for(const t of [BLUE,RED]){const F=FOUNT[t];if(F.x<vx0-200||F.x>vx1+200||F.y<vy0-200||F.y>vy1+200)continue;ctx.strokeStyle=TEAMC[t];ctx.globalAlpha=.25+.1*Math.sin(G.time*2);ctx.lineWidth=6;ctx.beginPath();ctx.arc(F.x,F.y,200*MAPK,0,TAU);ctx.stroke();ctx.globalAlpha=1}
   // tower ranges near player
   if(h.alive)for(const t of G.units){if(t.kind!=='tower'||!t.alive||t.team===h.team)continue;const dd=dist(t,h);if(dd<t.range+260){const tg=t.target===h;ctx.strokeStyle=tg?'rgba(255,70,60,.8)':'rgba(255,120,100,.35)';ctx.lineWidth=tg?5:3;ctx.setLineDash([18,14]);ctx.beginPath();ctx.arc(t.x,t.y,t.range,0,TAU);ctx.stroke();ctx.setLineDash([]);if(tg){ctx.strokeStyle='rgba(255,70,60,.7)';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(t.x,t.y-(ui_3d?ui_hy(190):40));ctx.lineTo(h.x,h.y-ui_hy(40));ctx.stroke()}}}
   // telegraphs / ground fx under units
@@ -2373,6 +2592,7 @@ function render(){
   const list=[];for(const u of G.units)if((u.alive||isStruct(u))&&vis(u)&&ui_seen(u))list.push(u);
   list.sort((a,b)=>a.y-b.y);
   if(ui_3d){for(const u of list)r3_overlay(u)}else for(const u of list){if(isStruct(u))drawStruct(u);else drawUnit(u)}
+  ui_targetMark();
   // projectiles
   for(const p of G.projs){
     if(p.x<vx0||p.x>vx1||p.y<vy0||p.y>vy1)continue;
@@ -2399,7 +2619,7 @@ function render(){
 }
 function menuBg(){
   if(!GROUND)return;const t=performance.now()/1000;const z=Math.max(W,H)/1300;
-  const cx=1500+Math.cos(t*.05)*600,cy=1500+Math.sin(t*.05)*600;
+  const cx=S/2+Math.cos(t*.05)*S*.2,cy=S/2+Math.sin(t*.05)*S*.2;
   ctx.setTransform(DPR*z,0,0,DPR*z,DPR*(W/2-cx*z),DPR*(H/2-cy*z));ctx.drawImage(GROUND,0,0,S,S);
   if(typeof map_drawLayer==='function'){try{ctx.save();map_drawLayer(ctx);ctx.restore()}catch(e){ctx.restore()}}
 }
@@ -2407,6 +2627,28 @@ function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h
 function ui_feedHero(name,color){if(name==='你')return G.player;for(const h of G.heroes)if(h.name===name&&TEAMC[h.team]===color)return h;return null}
 function ui_feedIcon(h,c,x,y,r){ctx.fillStyle=h?h.def.color:'#5b5f6b';ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.fill();ctx.strokeStyle=c;ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='rgba(20,14,8,.85)';ctx.font=`700 ${Math.round(r*1.1)}px ${FONT}`;ctx.textAlign='center';ctx.fillText(h?h.def.glyph:'塔',x,y+.5)}
 function ui_scoreRect(){const sw=176;return{x:W/2-sw/2,y:INS.t+6,w:sw,h:34}}
+function ui_minimap(mx,my,mm,big){
+  const h=G.player,k=mm/S,myTeam=h.team,f=big?2:1;
+  ctx.fillStyle='rgba(0,0,0,.6)';rr(mx-3,my-3,mm+6,mm+6,8);ctx.fill();
+  ctx.save();rr(mx,my,mm,mm,6);ctx.clip();ctx.drawImage(MINI,mx,my,mm,mm);
+  for(const u of G.units){
+    if(!u.alive)continue;const px=mx+u.x*k,py=my+u.y*k;
+    if(isStruct(u)){ctx.fillStyle=TEAMC[u.team];const z=(u.kind==='nexus'?7:5)*f;ctx.fillRect(px-z/2,py-z/2,z,z);ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(px-z/2,py-z/2,z,z)}
+    else if(u.kind==='minion'){ctx.fillStyle=TEAMC[u.team];const z=2.4*f;ctx.fillRect(px-z/2,py-z/2,z,z)}
+    else if(u.kind==='monster'){ctx.fillStyle='#d9a24a';ctx.beginPath();ctx.arc(px,py,(u.boss?3.5:2.2)*f,0,TAU);ctx.fill()}
+  }
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  for(const u of G.heroes){if(!u.alive)continue;if(u.team!==myTeam&&!API.canSee(myTeam,u))continue;const px=mx+u.x*k,py=my+u.y*k;
+    if(big){ui_feedIcon(u,u.isPlayer?'#ffd54a':TEAMC[u.team],px,py,9)}
+    else if(!u.isPlayer){ctx.fillStyle=TEAMC[u.team];ctx.beginPath();ctx.arc(px,py,3.6,0,TAU);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke()}}
+  if(h.alive&&!big){const px=mx+h.x*k,py=my+h.y*k;ctx.fillStyle=TEAMC[h.team];ctx.beginPath();ctx.arc(px,py,5,0,TAU);ctx.fill();ctx.strokeStyle='#ffd54a';ctx.lineWidth=2;ctx.stroke()}
+  ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=1;ctx.strokeRect(mx+(cam.x-W/2/Z)*k,my+(cam.y-H/2/Z/ui_SE)*k,W/Z*k,H/Z/ui_SE*k);
+  ctx.restore();
+}
+let ui_bigMap=false;
+function ui_bigRect(){const sz=Math.min(H-INS.t-INS.b-24,W*.62);return{x:W/2-sz/2,y:(H-sz)/2,s:sz}}
+function ui_teamGold(t){let g=0;for(const x of G.heroes)if(x.team===t)g+=x.goldTotal;return g}
+const ui_fmtK=g=>g>=10000?(g/10000).toFixed(1)+'万':(g/1000).toFixed(1)+'k';
 function drawHUD(){
   ctx.setTransform(DPR,0,0,DPR,0,0);
   const h=G.player,s=HUD.s;
@@ -2415,20 +2657,9 @@ function drawHUD(){
   if(h.alive&&G.units.some(t=>t.kind==='tower'&&t.alive&&t.target===h))vg=.35;
   if(h.alive&&h.hp/h.maxHp<.3){const sev=1-h.hp/h.maxHp/.3;vg=Math.max(vg,.22+.28*sev+.12*Math.sin(G.time*6))}
   if(vg>0&&ui_vig){ctx.globalAlpha=clamp(vg,0,.7);ctx.drawImage(ui_vig,0,0,W,H);ctx.globalAlpha=1}
-  // minimap
-  const mm=HUD.mm,mx=INS.l+8,my=INS.t+8,k=mm/S,myTeam=h.team;
-  ctx.fillStyle='rgba(0,0,0,.55)';rr(mx-3,my-3,mm+6,mm+6,8);ctx.fill();
-  ctx.save();rr(mx,my,mm,mm,6);ctx.clip();ctx.drawImage(MINI,mx,my,mm,mm);
-  for(const u of G.units){
-    if(!u.alive)continue;const px=mx+u.x*k,py=my+u.y*k;
-    if(isStruct(u)){ctx.fillStyle=TEAMC[u.team];const z=u.kind==='nexus'?7:5;ctx.fillRect(px-z/2,py-z/2,z,z);ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(px-z/2,py-z/2,z,z)}
-    else if(u.kind==='minion'){ctx.fillStyle=TEAMC[u.team];ctx.fillRect(px-1.2,py-1.2,2.4,2.4)}
-    else if(u.kind==='monster'){ctx.fillStyle='#d9a24a';ctx.beginPath();ctx.arc(px,py,u.boss?3.5:2.2,0,TAU);ctx.fill()}
-  }
-  for(const u of G.heroes){if(!u.alive||u.isPlayer)continue;if(u.team!==myTeam&&!API.canSee(myTeam,u))continue;const px=mx+u.x*k,py=my+u.y*k;ctx.fillStyle=TEAMC[u.team];ctx.beginPath();ctx.arc(px,py,3.6,0,TAU);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke()}
-  if(h.alive){const px=mx+h.x*k,py=my+h.y*k;ctx.fillStyle=TEAMC[h.team];ctx.beginPath();ctx.arc(px,py,5,0,TAU);ctx.fill();ctx.strokeStyle='#ffd54a';ctx.lineWidth=2;ctx.stroke()}
-  ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=1;ctx.strokeRect(mx+(cam.x-W/2/Z)*k,my+(cam.y-H/2/Z/ui_SE)*k,W/Z*k,H/Z/ui_SE*k);
-  ctx.restore();
+  // minimap (tap to enlarge)
+  const mm=HUD.mm,mx=INS.l+8,my=INS.t+8;
+  ui_minimap(mx,my,mm,false);
   // player status under minimap (+ owned items row)
   const py=my+mm+8,pw=mm;
   ctx.fillStyle='rgba(8,14,26,.72)';rr(mx-3,py,pw+6,60,8);ctx.fill();
@@ -2449,7 +2680,15 @@ function drawHUD(){
   ctx.textAlign='left';ctx.fillStyle=TEAMC[RED];ctx.fillText(G.score[RED],W/2+30,sy+17);
   ctx.textAlign='center';ctx.fillStyle='#c8d2e6';ctx.font=`700 12px ${FONT}`;const tm=Math.floor(G.time);ctx.fillText(`${String(tm/60|0).padStart(2,'0')}:${String(tm%60).padStart(2,'0')}`,W/2,sy+15);
   ctx.fillStyle='#8d9ab2';ctx.font=`600 8px ${FONT}`;ctx.fillText('战绩 ▾',W/2,sy+28);
-  if(G.bossBuff&&G.bossBuff[h.team]>G.time){ctx.font=`600 10px ${FONT}`;ctx.fillStyle='#d8ccff';ctx.fillText(`石像祝福 ${Math.ceil(G.bossBuff[h.team]-G.time)}s`,W/2,sy+46)}
+  if(G.bossBuff&&G.bossBuff[h.team]>G.time){ctx.font=`600 10px ${FONT}`;ctx.fillStyle='#d8ccff';ctx.fillText(`石像祝福 ${Math.ceil(G.bossBuff[h.team]-G.time)}s`,W/2,sy+58)}
+  // team economy (经济总量) beside the score
+  {const gb=ui_teamGold(BLUE),gr=ui_teamGold(RED),my2=h.team,lead=(my2===BLUE?gb-gr:gr-gb);
+    ctx.font=`800 12px ${FONT}`;ctx.textBaseline='middle';
+    const pw=84,ph=22,py2=sy+6;
+    ctx.fillStyle='rgba(8,14,26,.72)';rr(SR.x-pw-4,py2,pw,ph,8);ctx.fill();rr(SR.x+SR.w+4,py2,pw,ph,8);ctx.fill();
+    ctx.textAlign='center';ctx.fillStyle='#9fcfff';ctx.fillText('经济 '+ui_fmtK(gb),SR.x-pw/2-4,py2+ph/2+.5);
+    ctx.fillStyle='#ffb0a8';ctx.fillText('经济 '+ui_fmtK(gr),SR.x+SR.w+4+pw/2,py2+ph/2+.5);
+    if(Math.abs(lead)>=100){ctx.font=`700 10px ${FONT}`;ctx.fillStyle=lead>0?'#8dffa0':'#ff9d94';ctx.fillText((lead>0?'领先 ':'落后 ')+ui_fmtK(Math.abs(lead)),W/2,sy+SR.h+9)}}
   // kill feed (top-right, under the shop/pause buttons)
   {let fy=INS.t+54;const xr=W-INS.r-8,ic=9;
     for(const f of G.feed){const age=G.time-f.t;if(age>6||age<0)continue;ctx.globalAlpha=clamp(6-age,0,1)*clamp(age/.15,0,1);
@@ -2484,6 +2723,8 @@ function drawHUD(){
   }else if(h.alive)h.ui_dieAt=null;
   if(G.over)return;
   drawControls();
+  if(ui_bigMap){const B=ui_bigRect();ctx.fillStyle='rgba(3,6,12,.55)';ctx.fillRect(0,0,W,H);ui_minimap(B.x,B.y,B.s,true);
+    ctx.fillStyle='rgba(255,255,255,.8)';ctx.font=`600 12px ${FONT}`;ctx.textAlign='center';ctx.fillText('点任意处关闭大地图',W/2,B.y+B.s+12)}
 }
 function ui_btnSpr(key,r,stops,ox,oy){return ui_spr(key+'|'+Math.round(r)+'|'+DPR,r,DPR,g=>{const gr=g.createRadialGradient(ox*r,oy*r,2,0,0,r);for(const [o,c] of stops)gr.addColorStop(o,c);g.fillStyle=gr;g.beginPath();g.arc(0,0,r,0,TAU);g.fill()})}
 function drawControls(){
@@ -2498,6 +2739,14 @@ function drawControls(){
   ctx.globalAlpha=P.atk?1:.88;ui_blit(ui_btnSpr('atk',A.r,[[0,'#ffe6a6'],[1,'#a8701e']],-.22,-.26),A.x,A.y,P.atk?.94:1);
   ctx.strokeStyle='rgba(255,240,200,.9)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(A.x,A.y,A.r*(P.atk?.94:1),0,TAU);ctx.stroke();ctx.globalAlpha=1;
   ctx.strokeStyle='#3a2408';ctx.lineWidth=5*s;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(A.x-A.r*.38,A.y+A.r*.38);ctx.lineTo(A.x+A.r*.38,A.y-A.r*.38);ctx.stroke();ctx.beginPath();ctx.moveTo(A.x-A.r*.42,A.y+A.r*.05);ctx.lineTo(A.x-A.r*.05,A.y+A.r*.42);ctx.stroke();ctx.lineCap='butt';
+  // 打兵 / 推塔 buttons
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  for(const [b,lab,md,col] of [[HUD.lh,'兵','minion','#8fd16a'],[HUD.tw,'塔','tower','#ffb066']]){
+    const on=P.atk&&P.atkMode===md;
+    ctx.fillStyle='rgba(0,0,0,.45)';ctx.beginPath();ctx.arc(b.x,b.y+2,b.r+2,0,TAU);ctx.fill();
+    ctx.fillStyle=on?col:'rgba(22,30,48,.88)';ctx.beginPath();ctx.arc(b.x,b.y,b.r*(on?.94:1),0,TAU);ctx.fill();
+    ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.stroke();
+    ctx.fillStyle=on?'#1a1408':col;ctx.font=`400 ${Math.round(b.r*.95)}px ${DFONT}`;ctx.fillText(lab,b.x,b.y+1)}
   // skills
   ctx.textAlign='center';ctx.textBaseline='middle';
   for(let i=0;i<4;i++){
@@ -2535,6 +2784,8 @@ const keys={};
 cv.addEventListener('pointerdown',e=>{
   if(state!=='play'||!G||G.paused||G.over)return;e.preventDefault();initAudio();
   const x=e.clientX,y=e.clientY,h=G.player;
+  if(ui_bigMap){ui_bigMap=false;return}
+  if(x<INS.l+8+HUD.mm+6&&y<INS.t+8+HUD.mm+6){ui_bigMap=true;P.joy=null;return}
   const SR=ui_scoreRect();if(x>SR.x-6&&x<SR.x+SR.w+6&&y<SR.y+SR.h+8){ui_openBoard();return}
   for(let i=0;i<4;i++){const b=HUD.sk[i];if(Math.hypot(x-b.x,y-b.y)<b.r+10){
     if(!P.sk&&skillReady(h,i)&&h.stun<=0){const sk=h.def.skills[i];if(sk.type==='self'){castSkill(h,i)}else P.sk={id:e.pointerId,i,dx:0,dy:0,drag:false,cancel:false}}
@@ -2544,7 +2795,9 @@ cv.addEventListener('pointerdown',e=>{
     if(h.alive&&h.spellCd<=0&&!P.sp){if(ui_spAimed(h.spell))P.sp={id:e.pointerId,dx:0,dy:0,drag:false,cancel:false};else ui_castSpell(null)}
     else sfx(140,.06,'square',.03);
     return}}
-  if(Math.hypot(x-HUD.atk.x,y-HUD.atk.y)<HUD.atk.r+16){P.atk={id:e.pointerId};playerAttackPress();return}
+  if(Math.hypot(x-HUD.lh.x,y-HUD.lh.y)<HUD.lh.r+8){P.atk={id:e.pointerId};P.atkMode='minion';playerAttackPress('minion');return}
+  if(Math.hypot(x-HUD.tw.x,y-HUD.tw.y)<HUD.tw.r+8){P.atk={id:e.pointerId};P.atkMode='tower';playerAttackPress('tower');return}
+  if(Math.hypot(x-HUD.atk.x,y-HUD.atk.y)<HUD.atk.r+12){P.atk={id:e.pointerId};P.atkMode='hero';playerAttackPress('hero');return}
   if(Math.hypot(x-HUD.recall.x,y-HUD.recall.y)<HUD.recall.r+8){startRecall(h);return}
   if(x<W*.5&&!P.joy){
     if(ui_set.joy==='fixed'){const J=HUD.joy;if(Math.hypot(x-J.x,y-J.y)>J.R*2.2)return;P.joy={id:e.pointerId,ox:J.x,oy:J.y,x:J.x,y:J.y};ui_joyMove(x,y)}
@@ -2585,7 +2838,9 @@ window.addEventListener('keydown',e=>{
   const map={Digit1:0,Digit2:1,Digit3:2,Digit4:3,KeyU:0,KeyI:1,KeyO:2,KeyP:3};
   if(e.code in map){const i=map[e.code],sk=h.def.skills[i];const aim=P.mouse.in&&sk.type!=='self'?s2w(P.mouse.x,P.mouse.y):autoAim(h,sk);castSkill(h,i,aim)}
   if((e.code==='KeyF'||e.code==='Digit5')&&!e.repeat){let aim=null;if(ui_spAimed(h.spell)){if(P.mouse.in){const m=s2w(P.mouse.x,P.mouse.y),l=Math.hypot(m.x-h.x,m.y-h.y)||1;aim={x:h.x+(m.x-h.x)/l*Math.min(l,ui_SPRNG),y:h.y+(m.y-h.y)/l*Math.min(l,ui_SPRNG)}}else aim=ui_spellAim(null)}ui_castSpell(aim)}
-  if(e.code==='Space'||e.code==='KeyJ'){if(!e.repeat)playerAttackPress();e.preventDefault()}
+  if(e.code==='Space'||e.code==='KeyJ'){if(!e.repeat)playerAttackPress('hero');e.preventDefault()}
+  if(e.code==='KeyK'&&!e.repeat){playerAttackPress('minion');P.atkTap=G.time+.7}
+  if(e.code==='KeyL'&&!e.repeat){playerAttackPress('tower');P.atkTap=G.time+.7}
   if(e.code==='KeyB')startRecall(h);
 });
 window.addEventListener('keyup',e=>{keys[e.code]=false});
@@ -3868,22 +4123,22 @@ function m3w_clear(x,y,pad){
   return Math.abs(x-y)/Math.SQRT2>=175+pad;
 }
 function m3w_baseParts(team){
-  const T=m3w_team(team),p=m3w_p,F=FOUNT[team],S0=[],GEM=[],GL=[];
+  const T=m3w_team(team),p=m3w_p,F=FOUNT[team],S0=[],GEM=[],GL=[],K=S/3000; // K: map scale (coords authored in the 3000 frame)
   // fountain: low rune platform (units stand on it) + ring of pillars with crystals and light columns
   S0.push(p(m3w_Cy(70,76,4,16),m3w_STONED,[F.x,2,F.y]),p(m3w_Cy(58,58,1.5,16),m3w_STONEL,[F.x,4.5,F.y]));
-  GL.push(p(new THREE.RingGeometry(40,48,24),0,[F.x,5.6,F.y],[-m3w_H,0,0]),p(new THREE.RingGeometry(132,140,40),0,[F.x,1.6,F.y],[-m3w_H,0,0]));
-  for(let i=0;i<12;i++){const a=i/12*m3w_PI*2,x=F.x+Math.cos(a)*165,y=F.y+Math.sin(a)*165;
-    if(x<30||y<30||x>2970||y>2970||!m3w_clear(x,y,0))continue;
+  GL.push(p(new THREE.RingGeometry(40,48,24),0,[F.x,5.6,F.y],[-m3w_H,0,0]),p(new THREE.RingGeometry(132*K,140*K,40),0,[F.x,1.6,F.y],[-m3w_H,0,0]));
+  for(let i=0;i<12;i++){const a=i/12*m3w_PI*2,x=F.x+Math.cos(a)*165*K,y=F.y+Math.sin(a)*165*K;
+    if(x<30||y<30||x>S-30||y>S-30||!m3w_clear(x,y,0))continue;
     S0.push(p(m3w_B(26,10,26),m3w_STONED,[x,5,y],[0,-a,0]),p(m3w_Cy(9,12,70,6),m3w_STONE,[x,45,y]),p(m3w_Cy(14,10,8,6),m3w_STONED,[x,84,y]),
       p(m3w_Cy(12.5,12.5,3,6),T.d,[x,30,y]));
     GEM.push(p(m3w_Oc(11),0,[x,102,y],[0,a,0],[1,1.7,1]));
     GL.push(p(m3w_Cy(10,13,190,8,true),0,[x,95,y]),p(m3w_Sp(20,8,6),0,[x,102,y]));
   }
   // base decor: banners and braziers around the plaza, away from lanes/structures
-  const cx=team===0?260:2740,cy=team===0?2740:260;let n=0;
-  for(const rad of [470,575])for(let i=0;i<30;i++){const a=i/30*m3w_PI*2,x=cx+Math.cos(a)*rad,y=cy+Math.sin(a)*rad;
-    if(x<50||y<50||x>2950||y>2950||!m3w_clear(x,y,20))continue;
-    if(Math.hypot(x-NEXUS[team].x,y-NEXUS[team].y)<170||Math.hypot(x-BASET[team].x,y-BASET[team].y)<140||Math.hypot(x-F.x,y-F.y)<260)continue;
+  const cx=(team===0?260:2740)*K,cy=(team===0?2740:260)*K;let n=0;
+  for(const rad of [470*K,575*K])for(let i=0;i<30;i++){const a=i/30*m3w_PI*2,x=cx+Math.cos(a)*rad,y=cy+Math.sin(a)*rad;
+    if(x<50||y<50||x>S-50||y>S-50||!m3w_clear(x,y,20))continue;
+    if(Math.hypot(x-NEXUS[team].x,y-NEXUS[team].y)<170||Math.hypot(x-BASET[team].x,y-BASET[team].y)<140||Math.hypot(x-F.x,y-F.y)<260*K)continue;
     if(n++%2===0){S0.push(p(m3w_B(16,8,16),m3w_STONED,[x,4,y]),p(m3w_Cy(2.2,2.6,120,5),m3w_WOODD,[x,64,y]),p(m3w_B(36,3,3),m3w_GOLD,[x,118,y]),
       p(m3w_B(32,54,1.8),T.c,[x,89,y]),p(m3w_B(32,6,2.2),m3w_GOLD,[x,64,y]),p(m3w_Co(4,10,4),m3w_GOLD,[x,129,y]),p(m3w_Oc(5),T.d,[x,92,y+1.4],0,[1,1.3,.3]));}
     else{S0.push(p(m3w_Cy(12,15,10,6),m3w_STONED,[x,5,y]),p(m3w_Cy(8,10,46,6),m3w_STONE,[x,33,y]),p(m3w_Cy(15,8,10,6),m3w_IRON,[x,61,y]),p(m3w_Cy(15.5,15.5,2,6),m3w_GOLD,[x,66,y]));
@@ -3928,15 +4183,15 @@ function M3_env(scene){
     new THREE.MeshBasicMaterial({color:'#bff3ff',transparent:true,opacity:.4,blending:THREE.AdditiveBlending,depthWrite:false}),NG);
   gl.frustumCulled=false;gl.renderOrder=1;add(gl);
   let hs=99;const rr=()=>(hs=(hs*16807)%2147483647)/2147483647;
-  const G0=[];for(let i=0;i<NG;i++)G0.push({u:rr(),off:(rr()-.5)*180,sp:.004+rr()*.006,len:18+rr()*30,ph:rr()*9,w:.8+rr()*1.4});
+  const K=S/3000,G0=[];for(let i=0;i<NG;i++)G0.push({u:rr(),off:(rr()-.5)*180*K,sp:.004+rr()*.006,len:18+rr()*30,ph:rr()*9,w:.8+rr()*1.4});
   // fireflies in the jungle
-  const fl=[];for(let i=0;i<400&&fl.length<70;i++){const x=150+rr()*2700,y=150+rr()*2700;
-    if(!m3w_clear(x,y,20)||Math.hypot(x-260,y-2740)<700||Math.hypot(x-2740,y-260)<700)continue;fl.push({x,y,ph:rr()*9,r:10+rr()*25,h:18+rr()*40})}
+  const fl=[];for(let i=0;i<400&&fl.length<70;i++){const x=(150+rr()*2700)*K,y=(150+rr()*2700)*K;
+    if(!m3w_clear(x,y,20)||Math.hypot(x-260*K,y-2740*K)<700*K||Math.hypot(x-2740*K,y-260*K)<700*K)continue;fl.push({x,y,ph:rr()*9,r:10+rr()*25,h:18+rr()*40})}
   const fpos=new Float32Array(Math.max(1,fl.length)*3),fg=new THREE.BufferGeometry();fg.setAttribute('position',new THREE.BufferAttribute(fpos,3));
   const fm=new THREE.PointsMaterial({color:'#eaff9a',size:4,sizeAttenuation:false,transparent:true,opacity:.85,blending:THREE.AdditiveBlending,depthWrite:false});
   const pts=new THREE.Points(fg,fm);pts.frustumCulled=false;pts.userData.m3w_own=true;add(pts);
   const upd=(t)=>{
-    for(let i=0;i<NG;i++){const g=G0[i],u=fr(g.u+t*g.sp),pp=-100+u*3200,o=Math.sin(u*9)*40,k=Math.max(0,Math.sin(t*g.w+g.ph));
+    for(let i=0;i<NG;i++){const g=G0[i],u=fr(g.u+t*g.sp),pp=(-100+u*3200)*K,o=Math.sin(u*9)*40*K,k=Math.max(0,Math.sin(t*g.w+g.ph));
       v.set(pp+o+g.off/Math.SQRT2,1.5,pp-o-g.off/Math.SQRT2);e.set(0,-m3w_PI/4+Math.sin(u*9)*.15,0);q.setFromEuler(e);
       sv.set(Math.max(.01,g.len*k),1,2.2+k*1.5);M.compose(v,q,sv);gl.setMatrixAt(i,M)}
     gl.instanceMatrix.needsUpdate=true;
@@ -3962,8 +4217,13 @@ function M3_env(scene){
 // 2D overlay (#cv, transparent in 3D mode): fx, aim, projectiles, bars, floaters, HUD — drawn with a tilted affine transform
 // that matches the orthographic camera exactly (ground y squashed by sin(el), height lifted by cos(el)).
 let r3_disabled=false;
+// 画质: 'auto' | 'high' | 'mid' | 'low'  (auto starts at mid on phones, high on desktop; steps down if slow)
+function r3_q(){return R3.qset==='auto'?R3.auto:R3.qset}
+function r3_applyQ(){if(!R3.ok)return;r3_resize();const q=r3_q();
+  if(R3.sun){const sz=q==='high'?2048:q==='mid'?1536:1024;if(R3.sun.shadow.mapSize.x!==sz){R3.sun.shadow.mapSize.set(sz,sz);if(R3.sun.shadow.map){R3.sun.shadow.map.dispose();R3.sun.shadow.map=null}}}}
+function r3_setQ(v){R3.qset=v;R3.auto=R3.base;R3.qT=performance.now();try{localStorage.setItem('xyxg_q',v)}catch(e){}r3_applyQ()}
 const R3_EL=55*Math.PI/180;
-const R3={ok:false,ren:null,scene:null,cam:null,sun:null,ground:null,objs:new Map(),env:null,game:null,frame:0,lastT:0,fruits:[],pr:1,slow:0,fast:0};
+const R3={qset:'auto',auto:'mid',base:'mid',ok:false,ren:null,scene:null,cam:null,sun:null,ground:null,objs:new Map(),env:null,game:null,frame:0,lastT:0,fruits:[],pr:1,slow:0,fast:0};
 const R3_SCALE={hero:1.3,minion:1.2,monster:1.15,tower:1,nexus:1};
 
 // record skill casts for animation
@@ -3982,6 +4242,8 @@ function r3_init(){
     ren.setClearColor(0x0b1510,1);
     R3.ren=ren;R3.canvas=c;
     R3.cam=new THREE.OrthographicCamera(-1,1,1,-1,10,8000);
+    R3.base=matchMedia('(pointer:coarse)').matches?'mid':'high';R3.auto=R3.base;
+    try{const v=localStorage.getItem('xyxg_q');if(['auto','high','mid','low'].includes(v))R3.qset=v}catch(e){}
     R3.ok=true;ui_3d=true;ui_SE=Math.sin(R3_EL);ui_CE=Math.cos(R3_EL);
     r3_resize();
     return true;
@@ -3990,7 +4252,7 @@ function r3_init(){
 }
 function r3_resize(){
   if(!R3.ok)return;
-  R3.pr=Math.min(DPR,R3.slow>2?1:1.5);
+  const q=r3_q();R3.pr=Math.min(DPR,q==='high'?2:q==='mid'?1.5:1);
   R3.ren.setPixelRatio(R3.pr);R3.ren.setSize(W,H,false);
 }
 function r3_mat(c,o){return new THREE.MeshLambertMaterial(Object.assign({color:c},o||{}))}
@@ -4004,7 +4266,7 @@ function r3_buildScene(){
   sc.add(new THREE.AmbientLight(0xffffff,.12));
   const sun=new THREE.DirectionalLight(0xfff0d8,.95);
   sun.castShadow=true;
-  const sz=R3.slow>2?1024:2048;sun.shadow.mapSize.set(sz,sz);
+  const q=r3_q(),sz=q==='high'?2048:q==='mid'?1536:1024;sun.shadow.mapSize.set(sz,sz);
   const sc2=sun.shadow.camera;sc2.left=-1100;sc2.right=1100;sc2.top=1100;sc2.bottom=-1100;sc2.near=10;sc2.far=4000;
   sun.shadow.bias=-.0008;sun.shadow.normalBias=1.5;
   sc.add(sun);sc.add(sun.target);R3.sun=sun;
@@ -4137,7 +4399,9 @@ function r3_render(cx,cy){
   }
   const now=performance.now(),rdt=R3.lastNow?Math.min(.1,(now-R3.lastNow)/1000):.016;R3.lastNow=now;
   // adaptive resolution: if frames are slow for a while, drop pixel ratio
-  if(rdt>.045){R3.slow++;R3.fast=0;if(R3.slow===3)r3_resize()}else if(R3.slow<3)R3.slow=Math.max(0,R3.slow-.02);
+  // auto quality: step down when frames are slow for a while (only in 自动 mode)
+  if(R3.qset==='auto'&&!G.paused){R3.ft=(R3.ft||.016)*.95+rdt*.05;
+    if(R3.ft>.036&&now-(R3.qT||0)>4000&&R3.auto!=='low'){R3.auto=R3.auto==='high'?'mid':'low';R3.qT=now;r3_applyQ()}}
   R3.lastT=G.time;
   r3_sync(G.paused?0:Math.min(.1,typeof ui_fdt==='number'?ui_fdt:rdt));
   const cam=R3.cam,hw=W/2/Z,hh=H/2/Z;
@@ -4232,153 +4496,373 @@ function r3_stageLoop(now){
   R3M.ren.render(R3M.scene,R3M.cam);
   R3M.raf=requestAnimationFrame(r3_stageLoop);
 }
+
+// pause-menu 画质 selector
+function r3_syncQ(){const el=document.getElementById('setQ');if(!el)return;for(const b of el.children)b.setAttribute('aria-checked',b.dataset.v===R3.qset)}
+{const el=document.getElementById('setQ');if(el){for(const b of el.children)b.onclick=()=>{r3_setQ(b.dataset.v);r3_syncQ()};r3_syncQ();if(typeof THREE==='undefined')el.parentNode.hidden=true}}
 </script>
 <script>
 /* ==== music.js ==== */
 'use strict';
-// ================= music.js — original procedural background music (WebAudio, no files) =================
-// Menu theme: calm pentatonic pluck (古筝-like) over pads. Battle theme: drums + bass ostinato + strings + pentatonic lead,
-// with an extra percussion layer when the player is fighting. Victory / defeat stingers.
-const MUS={on:true,cur:null,next:0,step:0,bar:0,timer:0,master:null,bus:null,dly:null,noise:null,intens:0,endPlayed:null,duck:1};
+// ================= music.js — original procedural background music (WebAudio, no sample files) =================
+// Style: cheerful 东北 folk / 秧歌 / 二人转 — 唢呐-like lead, 锣鼓 percussion (大鼓 / 镲 / 大锣 / 小锣 / 梆子),
+// plucked 三弦 + 扬琴 accompaniment, bass on root/fifth, major pentatonic (宫调式). All melodies are original.
+// Menu: relaxed 秧歌 groove (G, 96 bpm). Battle: driving 锣鼓 (D, 128 bpm) + intensity layer. Win / lose stingers.
+// Also: "用我自己的音乐" — a local audio file chosen by the player, kept only in this device's IndexedDB.
+const MUS={on:true,cur:null,next:0,bi:0,step:0,loops:0,timer:0,master:null,bus:null,sBus:null,send:null,noise:null,
+  intens:0,endPlayed:null,duck:1,restT:0,
+  useUser:false,user:null,el:null,uGain:null,uRouted:false,uWant:false};
 try{const v=localStorage.getItem('xyxg_music');if(v==='0')MUS.on=false}catch(e){}
+try{MUS.useUser=localStorage.getItem('xyxg_bgm_use')==='1'}catch(e){}
 const mus_mtof=m=>440*Math.pow(2,(m-69)/12);
+const MUS_SCALE=[0,2,4,5,7,9,11]; // major scale; melodies below only use 1 2 3 5 6 (pentatonic)
 
+// ---------- notation: jianpu-like strings, 1 = key tonic ----------
+// token: [~|^]deg[' or ,]*[:len16]   deg 0 = rest, ' = octave up, , = octave down, default len 2 (an eighth)
+// ~ = scoop up into the note (唢呐 slide), ^ = grace note from above. '|' = bar line (only checked by the test).
+function mus_parse(str,key){
+  const bars=[];let pos=0;
+  for(const tk of str.trim().split(/\s+/)){
+    if(tk==='|')continue;
+    const m=/^([~^]?)([0-7])(['",]*)(?::(\d+))?$/.exec(tk);if(!m)throw new Error('bad note '+tk);
+    const len=m[4]?+m[4]:2,d=+m[2];
+    if(d){let oc=0;for(const c of m[3])oc+=c===','?-12:12;
+      const b=pos>>4;(bars[b]||(bars[b]=[])).push([pos&15,key+MUS_SCALE[d-1]+oc,len,m[1]])}
+    pos+=len;
+  }
+  const n=Math.ceil(pos/16);for(let i=0;i<n;i++)bars[i]=bars[i]||[];
+  return bars;
+}
+// harmony: per bar "r1 r2" = chord root (scale degree) for each half bar
+function mus_harm(str){return str.trim().split('|').map(s=>s.trim().split(/\s+/).map(Number))}
+function mus_deg(key,d){const i=d-1;return key+MUS_SCALE[((i%7)+7)%7]+12*Math.floor(i/7)}
+function mus_triad(key,d){return[mus_deg(key,d),mus_deg(key,d+2),mus_deg(key,d+4)]}
+
+// ---------- compositions ----------
+// Menu theme in G (1 = G4), 秧歌 groove. Form: A1 B A2 (24 bars, 60 s).
+const MUS_MENU_SRC={key:67,bpm:96,
+  A1:{mel:"1':3 6:1 5:2 6:2 ~1':4 6:2 5:2 | 5:2 3:2 5:3 6:1 ~5:8 | 3:2 5:2 6:2 1':2 ^6:3 5:1 3:2 2:2 | 1:2 2:2 3:4 ~2:8 |"+
+    " 1':3 6:1 5:2 6:2 ~1':4 ~2':4 | 1':2 6:2 5:2 3:2 ~5:8 | 3:2 5:1 6:1 5:2 3:2 2:2 3:2 2:2 1:2 | 6,:2 1:2 2:4 ~1:8",
+    harm:"1 1|5 1|6 5|4 5|1 1|4 1|6 5|5 1",lead:'suona'},
+  B:{mel:"6:2 6:2 5:2 6:2 ~1':4 0:4 | 5:1 6:1 5:2 3:2 2:2 ~3:8 | 2:2 2:2 1:2 2:2 ~3:4 0:4 | 5,:2 6,:2 1:2 2:2 ~1:8 |"+
+    " 3:2 5:2 ~6:4 5:2 6:2 1':4 | ^2':3 1':1 6:2 5:2 ~6:8 | 5:2 3:2 5:2 6:2 5:2 3:2 2:2 1:2 | 2:4 3:2 2:2 ~5:8",
+    harm:"6 6|5 1|5 5|4 1|1 4|4 6|1 5|5 5",lead:'call'},
+  A2:{mel:"1':3 6:1 5:2 6:2 ~1':4 6:2 5:2 | 5:2 3:2 5:3 6:1 ~5:8 | 3:2 5:2 6:2 1':2 ^6:3 5:1 3:2 2:2 | 1:2 2:2 3:4 ~2:8 |"+
+    " 1':3 6:1 5:2 6:2 ~1':4 ~2':4 | 1':2 6:2 5:2 3:2 ~5:8 | 5:2 6:2 1':2 6:2 5:2 3:2 2:1 3:1 2:2 | 1:3 2:1 6,:2 5,:2 ~1:8",
+    harm:"1 1|5 1|6 5|4 5|1 1|4 1|1 6|5 1",lead:'suona'},
+  form:['A1','B','A2']};
+// Battle theme in D (1 = D4), 锣鼓 driving. Form: (intro) A A2 B C (28 bars, ~52 s).
+const MUS_WAR_SRC={key:62,bpm:128,
+  I:{mel:"0:16 | 0:8 5:2 6:2 1':2 2':2",harm:"1 1|5 5",lead:'suona',perc:'intro'},
+  A:{mel:"1':2 1':1 1':1 6:2 1':2 ~2':4 1':2 6:2 | 5:2 6:2 1':2 6:2 ~5:4 3:4 | 1':2 1':1 1':1 6:2 1':2 2':2 3':2 2':2 1':2 | 6:2 1':2 ~2':4 ~5':8 |"+
+    " 3':2 2':2 1':2 2':2 ~3':4 5':2 3':2 | 2':2 1':2 6:2 1':2 ~2':8 | 1':2 6:2 5:2 6:2 1':2 6:2 5:2 3:2 | 2:2 3:2 5:2 6:2 ~1':8",
+    harm:"1 1|5 1|1 6|4 5|6 1|4 5|1 6|5 1",lead:'suona'},
+  A2:{mel:"1':2 1':1 1':1 6:2 1':2 ~2':4 1':2 6:2 | 5:2 6:2 1':2 6:2 ~5:4 3:4 | 1':2 1':1 1':1 6:2 1':2 2':2 3':2 2':2 1':2 | 6:2 1':2 ~2':4 ~5':8 |"+
+    " 3':2 2':2 1':2 2':2 ~3':4 5':2 3':2 | 2':2 1':2 6:2 1':2 ~2':8 | 5:1 6:1 1':2 6:2 5:2 3:2 2:2 3:2 5:2 | ^6:3 5:1 3:2 2:2 ~1:8",
+    harm:"1 1|5 1|1 6|4 5|6 1|4 5|1 6|5 1",lead:'suona'},
+  B:{mel:"5:2 0:2 5:2 0:2 5:1 6:1 5:2 ~3:4 | 1':2 0:2 1':2 0:2 1':1 2':1 1':2 ~6:4 | 5:2 6:2 1':2 2':2 ^3':3 2':1 ~1':4 | 6:2 5:2 3:2 5:2 ~6:8 |"+
+    " 3:2 0:2 3:2 0:2 3:1 5:1 3:2 ~2:4 | 6:2 0:2 6:2 0:2 6:1 1':1 6:2 ~5:4 | 3':2 2':2 1':2 6:2 2':2 1':2 6:2 5:2 | 6:2 1':2 ~5:4 0:8",
+    harm:"1 1|4 4|1 6|5 4|6 6|4 4|1 5|5 5",lead:'call'},
+  C:{mel:"1':1 0:3 1':1 0:3 1':1 0:1 1':1 0:5 | 0:16 | 5':1 0:3 5':1 0:3 3':1 2':1 1':1 0:5 | 0:8 5:2 6:2 1':2 2':2",
+    harm:"1 1|1 1|5 5|5 5",lead:'suona',perc:'break'},
+  form:['I','A','A2','B','C']};
+// 锣鼓经 lanes for special sections (16 chars per bar; x = strong, o = soft)
+const MUS_PERC={
+  intro:[{D:"x..ox..ox.oox...",C:"x...x...x.x.x...",G:"x...............",K:"..x...x...x...x."},
+         {D:"x.x.x.x.xoxoxxxx",C:"x...x...x...x.x.",g:"......x.......x."}],
+  break:[{D:"x..ox..ox.oox...",C:"x...x...x.x.x...",G:"x...............",K:"..x...x...x...x."},
+         {D:"x.x.x.x.xoxoxxxx",C:"x...x...x...x.x.",g:"......x.......x."},
+         {D:"x..ox..ox.oox...",C:"x...x...x.x.x...",G:"x...............",K:"..x...x...x...x."},
+         {D:"x...x...xoxoxxxx",C:"x...x...x.x.xoxo",g:"..............x."}]};
+function mus_build(src){
+  const bars=[];let introEnd=0;
+  for(const name of src.form){const s=src[name],mel=mus_parse(s.mel,src.key),h=mus_harm(s.harm);
+    for(let i=0;i<mel.length;i++)bars.push({sec:name,i,n:mel.length,mel:mel[i],h:h[i]||h[h.length-1],lead:s.lead,perc:s.perc?MUS_PERC[s.perc][i]:null});
+    if(name==='I')introEnd=bars.length}
+  return{key:src.key,bpm:src.bpm,bars,introEnd};
+}
+const MUS_MENU=mus_build(MUS_MENU_SRC),MUS_WAR=mus_build(MUS_WAR_SRC);
+
+// ---------- engine ----------
 function mus_init(){
   if(MUS.master||!AC)return!!MUS.master;
   try{
     if(navigator.audioSession)try{navigator.audioSession.type='playback'}catch(e){} // iPhone: play even with the silent switch on
     const comp=AC.createDynamicsCompressor();comp.threshold.value=-16;comp.ratio.value=4;comp.connect(AC.destination);
-    const m=AC.createGain();m.gain.value=MUS.on?.0001:0;m.connect(comp);
-    const bus=AC.createGain();bus.gain.value=1;bus.connect(m);
-    // simple stereo-ish echo for space
-    const d=AC.createDelay(1);d.delayTime.value=.32;const fb=AC.createGain();fb.gain.value=.28;const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2400;
-    const send=AC.createGain();send.gain.value=.22;send.connect(d);d.connect(lp);lp.connect(fb);fb.connect(d);lp.connect(m);
-    // noise buffer for drums
-    const nb=AC.createBuffer(1,AC.sampleRate*.5,AC.sampleRate),ch=nb.getChannelData(0);for(let i=0;i<ch.length;i++)ch[i]=Math.random()*2-1;
-    MUS.master=m;MUS.bus=bus;MUS.send=send;MUS.noise=nb;
-    m.gain.setTargetAtTime(MUS.on?.55:0,AC.currentTime,.8);
+    const m=AC.createGain();m.gain.value=.0001;m.connect(comp);
+    // gentle top cut so nothing is piercing on phone speakers
+    const tone=AC.createBiquadFilter();tone.type='lowpass';tone.frequency.value=6500;tone.Q.value=.5;tone.connect(m);
+    const bus=AC.createGain();bus.gain.value=1;bus.connect(tone);
+    // 唢呐 body: nasal formant around 1.5 kHz, then soften the very top
+    const pk=AC.createBiquadFilter();pk.type='peaking';pk.frequency.value=1500;pk.Q.value=1.3;pk.gain.value=9;
+    const pk2=AC.createBiquadFilter();pk2.type='peaking';pk2.frequency.value=2400;pk2.Q.value=2;pk2.gain.value=4;
+    const slp=AC.createBiquadFilter();slp.type='lowpass';slp.frequency.value=3400;slp.Q.value=.6;
+    const sBus=AC.createGain();sBus.gain.value=1;sBus.connect(pk);pk.connect(pk2);pk2.connect(slp);slp.connect(bus);
+    // small room echo
+    const d=AC.createDelay(1);d.delayTime.value=.27;const fb=AC.createGain();fb.gain.value=.22;const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2200;
+    const send=AC.createGain();send.gain.value=.18;send.connect(d);d.connect(lp);lp.connect(fb);fb.connect(d);lp.connect(bus);
+    slp.connect(send);
+    // noise buffer for cymbals / drum skin
+    const nb=AC.createBuffer(1,AC.sampleRate*1|0,AC.sampleRate),ch=nb.getChannelData(0);for(let i=0;i<ch.length;i++)ch[i]=Math.random()*2-1;
+    MUS.master=m;MUS.bus=bus;MUS.sBus=sBus;MUS.send=send;MUS.noise=nb;
+    mus_applyVol();
     MUS.timer=setInterval(mus_tick,90);
     return true;
   }catch(e){MUS.master=null;return false}
 }
+function mus_target(){return MUS.on&&!MUS.useUser?.55*MUS.duck:0}
+function mus_applyVol(){
+  if(MUS.master)MUS.master.gain.setTargetAtTime(Math.max(mus_target(),.0001),AC.currentTime,.25);
+  mus_userSync();
+}
 function mus_setOn(v){
   MUS.on=v;try{localStorage.setItem('xyxg_music',v?'1':'0')}catch(e){}
-  if(MUS.master)MUS.master.gain.setTargetAtTime(v?.55*MUS.duck:0,AC.currentTime,.25);
+  mus_applyVol();
 }
 // ---------- instruments ----------
-function mus_env(g,t,a,peak,dec,sus,rel,len){g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(peak,t+a);g.gain.setTargetAtTime(peak*sus,t+a,dec);g.gain.setTargetAtTime(0,t+len,rel)}
-function mus_pluck(t,m,len,v,wet){ // 古筝-like pluck: triangle + quick upper partial, slight pitch bend in
-  const o=AC.createOscillator(),o2=AC.createOscillator(),g=AC.createGain(),f=AC.createBiquadFilter();
-  o.type='triangle';o2.type='sine';const fr=mus_mtof(m);o.frequency.setValueAtTime(fr*.985,t);o.frequency.exponentialRampToValueAtTime(fr,t+.06);o2.frequency.value=fr*2.005;
-  f.type='lowpass';f.frequency.setValueAtTime(5200,t);f.frequency.exponentialRampToValueAtTime(900,t+len*.9+.2);
-  const g2=AC.createGain();g2.gain.value=.35;o2.connect(g2);g2.connect(f);o.connect(f);f.connect(g);g.connect(MUS.bus);if(wet)g.connect(MUS.send);
-  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+.005);g.gain.exponentialRampToValueAtTime(v*.25,t+.25);g.gain.exponentialRampToValueAtTime(.0001,t+len+.6);
-  o.start(t);o2.start(t);o.stop(t+len+.7);o2.stop(t+len+.7);
+function mus_osc(type,f){const o=AC.createOscillator();o.type=type;o.frequency.value=f;return o}
+// 唢呐: sawtooth through the shared formant bus; scoop into every note, delayed vibrato, slight fall at the end of long notes
+function mus_suona(t,m,len,v,orn,octDown){
+  const f=mus_mtof(octDown?m-12:m),o=mus_osc('sawtooth',f),g=AC.createGain(),fr=o.frequency;
+  if(orn==='^'){fr.setValueAtTime(f*1.122,t);fr.setValueAtTime(f*1.122,t+.045);fr.exponentialRampToValueAtTime(f,t+.06)}
+  else if(orn==='~'){fr.setValueAtTime(f*.86,t);fr.exponentialRampToValueAtTime(f,t+.13)}
+  else{fr.setValueAtTime(f*.97,t);fr.exponentialRampToValueAtTime(f,t+.035)}
+  const end=t+len;
+  if(len>.3){const lfo=mus_osc('sine',5.6),lg=AC.createGain();lg.gain.setValueAtTime(0,t);lg.gain.linearRampToValueAtTime(f*.018,t+Math.min(.35,len*.6));
+    lfo.connect(lg);lg.connect(fr);lfo.start(t);lfo.stop(end+.12);
+    if(len>.5)fr.setTargetAtTime(f*.96,end-.06,.05)}
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+.025);g.gain.setTargetAtTime(v*.78,t+.03,.12);
+  g.gain.setValueAtTime(v*.78,Math.max(t+.04,end-.04));g.gain.linearRampToValueAtTime(0,end+.06);
+  o.connect(g);g.connect(MUS.sBus);o.start(t);o.stop(end+.12);
 }
-function mus_pad(t,notes,len,v,bright){
-  const f=AC.createBiquadFilter();f.type='lowpass';f.frequency.value=bright||900;f.Q.value=.6;
-  const g=AC.createGain();f.connect(g);g.connect(MUS.bus);g.connect(MUS.send);
-  mus_env(g,t,len*.25,v,len*.3,.8,.4,len);
-  for(const m of notes)for(const dt of [-6,6]){const o=AC.createOscillator();o.type='sawtooth';o.frequency.value=mus_mtof(m);o.detune.value=dt;o.connect(f);o.start(t);o.stop(t+len+1.6)}
+// 三弦 (sawtooth, closing filter) / 扬琴 (bright triangle, metallic octave)
+function mus_pluck(t,m,len,v,kind,wet){
+  const f=mus_mtof(m),g=AC.createGain();
+  if(kind==='qin'){const o=mus_osc('triangle',f),o2=mus_osc('sine',f*2.01),g2=AC.createGain();g2.gain.value=.4;o2.connect(g2);g2.connect(g);o.connect(g);
+    g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(v*.3,t+.12);g.gain.exponentialRampToValueAtTime(.0001,t+len+.5);
+    o.start(t);o2.start(t);o.stop(t+len+.55);o2.stop(t+len+.55)}
+  else{const o=mus_osc('sawtooth',f),fl=AC.createBiquadFilter();fl.type='lowpass';fl.Q.value=3;fl.frequency.setValueAtTime(2600,t);fl.frequency.exponentialRampToValueAtTime(500,t+.18);
+    o.frequency.setValueAtTime(f*1.01,t);o.frequency.exponentialRampToValueAtTime(f,t+.03);o.connect(fl);fl.connect(g);
+    g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.0001,t+Math.min(len,.5)+.15);o.start(t);o.stop(t+Math.min(len,.5)+.2)}
+  g.connect(MUS.bus);if(wet)g.connect(MUS.send);
 }
 function mus_bass(t,m,len,v){
-  const o=AC.createOscillator(),g=AC.createGain(),f=AC.createBiquadFilter();o.type='sawtooth';o.frequency.value=mus_mtof(m);
-  f.type='lowpass';f.frequency.setValueAtTime(700,t);f.frequency.exponentialRampToValueAtTime(180,t+len);f.Q.value=4;
-  o.connect(f);f.connect(g);g.connect(MUS.bus);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+len+.05);
+  const o=mus_osc('sawtooth',mus_mtof(m)),g=AC.createGain(),f=AC.createBiquadFilter();
+  f.type='lowpass';f.frequency.setValueAtTime(900,t);f.frequency.exponentialRampToValueAtTime(220,t+len);f.Q.value=2;
+  o.connect(f);f.connect(g);g.connect(MUS.bus);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+len+.06);
   o.start(t);o.stop(t+len+.1);
 }
-function mus_lead(t,m,len,v){ // bright flute-ish lead with vibrato
-  const o=AC.createOscillator(),g=AC.createGain(),f=AC.createBiquadFilter(),lfo=AC.createOscillator(),lg=AC.createGain();
-  o.type='square';o.frequency.value=mus_mtof(m);lfo.frequency.value=5.5;lg.gain.value=mus_mtof(m)*.012;lfo.connect(lg);lg.connect(o.frequency);
-  f.type='lowpass';f.frequency.value=2600;o.connect(f);f.connect(g);g.connect(MUS.bus);g.connect(MUS.send);
-  mus_env(g,t,.03,v,.15,.7,.08,len);o.start(t);lfo.start(t);o.stop(t+len+.5);lfo.stop(t+len+.5);
+function mus_nz(t,v,len,freq,type,q){const s=AC.createBufferSource(),g=AC.createGain(),f=AC.createBiquadFilter();s.buffer=MUS.noise;f.type=type;f.frequency.value=freq;f.Q.value=q||.8;
+  s.connect(f);f.connect(g);g.connect(MUS.bus);g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.0001,t+len);s.start(t,Math.random()*.4);s.stop(t+len+.02)}
+// 大鼓: low skin thump
+function mus_drum(t,v){const o=mus_osc('sine',125),g=AC.createGain();o.frequency.setValueAtTime(125,t);o.frequency.exponentialRampToValueAtTime(58,t+.18);
+  g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.0001,t+.38);o.connect(g);g.connect(MUS.bus);o.start(t);o.stop(t+.4);
+  mus_nz(t,v*.35,.05,700,'lowpass')}
+// 镲 / 铙钹: open "锵" or closed "切"
+function mus_cym(t,v,open){mus_nz(t,v,open?.32:.06,open?4200:5200,'bandpass',.7)}
+// 大锣: low gong with falling pitch, long decay; 小锣: comic bright gong bending UP
+function mus_gong(t,v,small){
+  const b=small?640:150,g=AC.createGain(),dur=small?.7:2.6;
+  for(const [r,a] of [[1,1],[1.47,.45],[2.09,.25]]){const o=mus_osc('sine',b*r);
+    if(small){o.frequency.setValueAtTime(b*r*.94,t);o.frequency.exponentialRampToValueAtTime(b*r*1.06,t+.25)}
+    else o.frequency.exponentialRampToValueAtTime(b*r*.93,t+dur);
+    const og=AC.createGain();og.gain.value=a;o.connect(og);og.connect(g);o.start(t);o.stop(t+dur+.05)}
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+.008);g.gain.exponentialRampToValueAtTime(.0001,t+dur);g.connect(MUS.bus);g.connect(MUS.send);
+  if(!small)mus_nz(t,v*.4,.3,2200,'bandpass',.6);
 }
-function mus_kick(t,v){const o=AC.createOscillator(),g=AC.createGain();o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(42,t+.14);
-  g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.0001,t+.32);o.connect(g);g.connect(MUS.bus);o.start(t);o.stop(t+.35)}
-function mus_noise(t,v,len,freq,type){const s=AC.createBufferSource(),g=AC.createGain(),f=AC.createBiquadFilter();s.buffer=MUS.noise;f.type=type||'highpass';f.frequency.value=freq;
-  s.connect(f);f.connect(g);g.connect(MUS.bus);g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.0001,t+len);s.start(t);s.stop(t+len+.02)}
-function mus_tom(t,v,fr){const o=AC.createOscillator(),g=AC.createGain();o.type='sine';o.frequency.setValueAtTime(fr,t);o.frequency.exponentialRampToValueAtTime(fr*.55,t+.25);
-  g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.0001,t+.4);o.connect(g);g.connect(MUS.bus);o.start(t);o.stop(t+.45)}
-
-// ---------- compositions (D minor pentatonic: D F G A C) ----------
-// steps are 16ths; note = MIDI
-const MUS_MENU={bpm:76,bars:8,
-  chords:[[50,57,62,65],[53,60,65,69],[48,55,60,64],[50,57,62,65],[46,53,58,62],[48,55,60,64],[45,52,57,60],[50,57,62,69]],
-  mel:[ // [bar, step, note, len16]
-    [0,0,74,4],[0,6,72,2],[0,8,69,6],[0,14,67,2],[1,0,69,8],[1,10,72,2],[1,12,74,4],
-    [2,0,77,3],[2,4,76,1],[2,6,74,2],[2,8,72,4],[2,12,69,4],[3,0,74,12],
-    [4,0,69,4],[4,4,72,4],[4,8,74,2],[4,10,72,2],[4,12,70,4],[5,0,72,8],[5,10,69,2],[5,12,67,4],
-    [6,0,69,4],[6,6,64,2],[6,8,67,4],[6,12,69,4],[7,0,74,12]]};
-const MUS_WAR={bpm:118,bars:8,
-  roots:[38,38,34,34,36,36,33,37],
-  chords:[[50,53,57],[50,53,57],[46,50,53],[46,50,53],[48,52,55],[48,52,55],[45,48,52],[49,52,57]],
-  mel:[
-    [0,0,62,3],[0,3,65,3],[0,6,67,2],[0,8,69,6],[0,14,72,2],[1,0,69,4],[1,4,67,4],[1,8,65,8],
-    [2,0,62,3],[2,3,65,3],[2,6,67,2],[2,8,70,4],[2,12,69,2],[2,14,67,2],[3,0,65,6],[3,6,67,2],[3,8,62,8],
-    [4,0,72,3],[4,3,74,3],[4,6,72,2],[4,8,69,6],[4,14,67,2],[5,0,69,4],[5,4,72,4],[5,8,74,8],
-    [6,0,77,4],[6,4,76,2],[6,6,74,2],[6,8,72,4],[6,12,69,4],[7,0,73,4],[7,4,74,12]]};
-
-function mus_want(){
-  if(state==='play'&&G&&!G.over)return'war';
-  return'menu';
+// 梆子: hollow wood click
+function mus_block(t,v){const o=mus_osc('triangle',1180),g=AC.createGain();o.frequency.exponentialRampToValueAtTime(1050,t+.04);
+  g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.0001,t+.06);o.connect(g);g.connect(MUS.bus);o.start(t);o.stop(t+.08)}
+function mus_lanes(L,step,t,vs){
+  const at=k=>L[k]&&L[k][step]!=='.'&&L[k][step]?(L[k][step]==='x'?1:.55):0;let a;
+  if(a=at('D'))mus_drum(t,.5*a*vs);if(a=at('C'))mus_cym(t,.11*a*vs,a===1);if(a=at('G'))mus_gong(t,.16*vs);
+  if(a=at('g'))mus_gong(t,.07*a*vs,true);if(a=at('K'))mus_block(t,.06*a*vs);
 }
+
+// ---------- scheduler ----------
+function mus_want(){if(state==='play'&&G&&!G.over)return'war';return'menu'}
 function mus_tick(){
   if(!AC||!MUS.master)return;
-  if(AC.state==='suspended')return;
   const want=mus_want();
+  // duck while paused
+  const duck=G&&G.paused?.45:1;if(duck!==MUS.duck){MUS.duck=duck;mus_applyVol()}
+  if(AC.state==='suspended')return;
+  if(MUS.useUser&&MUS.user){MUS.cur=null;if(G&&G.over)MUS.endPlayed=G;return}
   // end-of-game stinger
-  if(G&&G.over&&MUS.endPlayed!==G){MUS.endPlayed=G;mus_sting(G.winner===G.player.team);MUS.cur='rest';MUS.restT=AC.currentTime+3.5;return}
+  if(G&&G.over&&MUS.endPlayed!==G){MUS.endPlayed=G;if(MUS.on)mus_sting(G.player&&G.winner===G.player.team);MUS.cur='rest';MUS.restT=AC.currentTime+4.5;return}
   if(MUS.cur==='rest'){if(AC.currentTime<MUS.restT)return;MUS.cur=null}
-  if(want!==MUS.cur){MUS.cur=want;MUS.step=0;MUS.bar=0;MUS.next=AC.currentTime+.08}
-  // duck while paused / in menus over the battle
-  const duck=G&&G.paused?.45:1;if(duck!==MUS.duck){MUS.duck=duck;if(MUS.on)MUS.master.gain.setTargetAtTime(.55*duck,AC.currentTime,.3)}
-  if(!MUS.on)return;
+  if(want!==MUS.cur){MUS.cur=want;MUS.bi=0;MUS.step=0;MUS.loops=0;MUS.next=AC.currentTime+.1}
+  if(!MUS.on){MUS.next=AC.currentTime+.1;return}
   // battle intensity: player in combat recently, or late game
-  if(want==='war'&&G.player){const h=G.player,recent=h.alive&&Object.values(h.lastDmg||{}).some(t=>G.time-t<4)||(G.time-(h.ui_lastHitT||-9)<3);
+  if(want==='war'&&G&&G.player){const h=G.player,recent=h.alive&&Object.values(h.lastDmg||{}).some(t=>G.time-t<4)||(G.time-(h.ui_lastHitT||-9)<3);
     const target=(recent?1:0)+(G.time>600?.35:0);MUS.intens+=(target-MUS.intens)*.15}
+  if(want==='menu')MUS.intens=0;
   const song=MUS.cur==='war'?MUS_WAR:MUS_MENU,sp=60/song.bpm/4;
-  while(MUS.next<AC.currentTime+.35){mus_play(song,MUS.cur,MUS.bar,MUS.step,MUS.next,sp);MUS.next+=sp;if(++MUS.step>=16){MUS.step=0;MUS.bar=(MUS.bar+1)%song.bars;if(MUS.bar===0)MUS.loops=(MUS.loops||0)+1}}
-}
-function mus_play(s,kind,bar,step,t,sp){
-  const loops=MUS.loops||0;
-  if(kind==='menu'){
-    if(step===0)mus_pad(t,s.chords[bar],sp*16,.035,800);
-    // arpeggio pluck in eighths (pattern varies on odd loops)
-    if(step%2===0){const c=s.chords[bar],pat=loops%2?[0,2,1,3,2,1,3,2]:[0,1,2,3,2,1,2,3];const n=c[pat[step/2]]+12;mus_pluck(t,n,sp*2,.05,true)}
-    for(const m of s.mel)if(m[0]===bar&&m[1]===step&&loops%3!==2)mus_pluck(t,m[2],sp*m[3],.11,true);
-    if(step===0&&bar%2===0)mus_tom(t,.12,90);
-    return;
+  if(MUS.next<AC.currentTime-.2)MUS.next=AC.currentTime+.05; // timer stalled (background tab): don't burst-schedule
+  while(MUS.next<AC.currentTime+.35){
+    try{mus_play(song,MUS.cur,song.bars[MUS.bi],MUS.step,MUS.next,sp)}catch(e){}
+    MUS.next+=sp;
+    if(++MUS.step>=16){MUS.step=0;if(++MUS.bi>=song.bars.length){MUS.bi=song.introEnd;MUS.loops++}}
   }
-  // war
-  const I=MUS.intens;
-  if(step===0)mus_pad(t,s.chords[bar].map(n=>n+12),sp*16,.028,1200+I*900);
-  // bass: driving eighths with octave jumps
-  if(step%2===0){const r=s.roots[bar];mus_bass(t,r+(step%8===6?12:0),sp*1.6,.13)}
-  // drums
-  if(step===0||step===8||(step===10&&bar%2===1))mus_kick(t,.55);
-  if(step===4||step===12)mus_noise(t,.22,.18,1200,'bandpass');
-  if(step%2===0)mus_noise(t,step%4===2?.05:.03,.05,7000);
-  if(I>.5){if(step%4===3)mus_noise(t,.035,.04,8000);if(step===14||step===15)mus_tom(t,.18,step===14?140:110)}
-  if(bar===7&&step>=12)mus_tom(t,.2,180-(step-12)*25);
-  // lead melody (rests the first loop's second half for breathing room, louder when intense)
-  if(!(loops===0&&bar>=4))for(const m of s.mel)if(m[0]===bar&&m[1]===step)mus_lead(t,m[2],sp*m[3],.045+I*.02);
-  // counter pluck when intense
-  if(I>.3&&step%4===2){const c=s.chords[bar];mus_pluck(t,c[(step/4|0)%c.length]+24,sp*2,.04,true)}
+}
+function mus_play(s,kind,B,step,t,sp){
+  const war=kind==='war',I=war?MUS.intens:0,key=s.key,loops=MUS.loops,half=step>>3,root=B.h[half];
+  // ---- percussion ----
+  if(B.perc)mus_lanes(B.perc,step,t,1);
+  else if(war){
+    if(step%4===0)mus_drum(t,step%8===0?.5:.34);
+    if(step===7||step===15)mus_drum(t,.22);
+    if(step===4||step===12)mus_cym(t,.1,true);
+    if(step%4===2)mus_cym(t,.045,false);
+    if(step===3||step===11)mus_block(t,.05);
+    if(B.i===0&&step===0)mus_gong(t,.15);
+    if(I>.5){if(step%2===1)mus_cym(t,.028,false);if(step===6&&B.i%2===1)mus_gong(t,.06,true);
+      if(B.i%4===3&&step>=12)mus_drum(t,.3)}
+    if(B.i===B.n-1&&step>=12&&step%2===0)mus_drum(t,.38);
+  }else{ // 秧歌: 咚 锵 | 咚咚 锵
+    if(step===0||step===8)mus_drum(t,step?.3:.38);
+    if(step===10)mus_drum(t,.22);
+    if(step===4||step===12)mus_cym(t,.075,true);
+    if(step%4===2)mus_block(t,.04);
+    if(B.i===3&&step===14)mus_gong(t,.06,true);
+    if(B.i===7&&step>=12&&step%2===0)mus_drum(t,.24);
+    if(B.i===0&&step===0)mus_gong(t,.1);
+  }
+  // ---- bass: root on the beat, fifth on the "and" (boom-chick) ----
+  const bk=key-24;
+  if(!B.perc||step%8===0){
+    if(step%8===0)mus_bass(t,mus_deg(bk,root),sp*3,war?.13:.12);
+    else if(step%8===4)mus_bass(t,mus_deg(bk,root+4),sp*2,war?.1:.08);
+    else if(war&&(step%8===6))mus_bass(t,mus_deg(bk,root)+12,sp*1.5,.07);
+  }
+  // ---- 三弦 off-beat chord stabs, 扬琴 broken chords ----
+  if(!B.perc){
+    const tri=mus_triad(key-12,root);
+    if(step%4===2){mus_pluck(t,tri[1],sp*2,war?.05:.045,'xian');mus_pluck(t,tri[2],sp*2,war?.04:.035,'xian')}
+    const qinOn=war?I>.3:(B.lead==='call'||loops%2===1);
+    if(qinOn&&step%2===0){const pat=[0,1,2,1,2,0,1,2],n=tri[pat[(step>>1)&7]]+12+(step%8===4?12:0);mus_pluck(t,n,sp*2,war?.035:.03,'qin',true)}
+  }
+  // ---- melody ----
+  const resp=B.lead==='call'&&(B.i>>1)%2===1; // call (唢呐) and response (扬琴 + 三弦) in alternating 2-bar phrases
+  for(const e of B.mel)if(e[0]===step){
+    const len=sp*e[2];
+    if(resp){mus_pluck(t,e[1],len,.1,'qin',true);mus_pluck(t,e[1]-12,len,.05,'xian')}
+    else{mus_suona(t,e[1],len*.94,war?.075+I*.02:.07,e[3]);
+      if(war&&I>.6)mus_suona(t,e[1],len*.94,.035,'',true); // second 唢呐 an octave below when the fight heats up
+    }
+  }
 }
 function mus_sting(win){
-  const t=AC.currentTime+.05;
-  const notes=win?[62,66,69,74,78,81]:[62,61,57,53,50];
-  notes.forEach((n,i)=>{win?mus_lead(t+i*.12,n,i===notes.length-1?1.6:.14,.07):mus_pluck(t+i*.28,n,.5,.12,true)});
-  mus_pad(t+(win?.6:1.2),win?[62,66,69,74]:[50,53,57,62],2.4,.04,win?1600:700);
-  if(win){mus_kick(t+.6,.6);mus_noise(t+.6,.3,.8,3000)}
+  const t=AC.currentTime+.05,key=62,sp=.065;
+  if(win){ // festive 锣鼓 roll + 唢呐 run up and a long trilled high note, then 仓 仓 仓
+    for(let i=0;i<12;i++)mus_drum(t+i*sp,.2+i*.025);
+    [1,2,3,5,6,8,9,10].forEach((d,i)=>mus_suona(t+i*sp*1.2,mus_deg(key,d),sp*1.1,.07,''));
+    const top=t+8*sp*1.2,hi=mus_deg(key,12);
+    for(let i=0;i<6;i++)mus_suona(top+i*.09,i%2?hi+2:hi,.085,.075,'');
+    mus_suona(top+.54,hi,1.3,.08,'~');
+    for(const [k,dt] of [[0,0],[1,.36],[2,.72]]){const tt=top+.54+dt;mus_drum(tt,.55);mus_cym(tt,.13,true);if(k===2)mus_gong(tt,.2)}
+    mus_bass(top+.54,key-24,.3,.14);mus_bass(top+.9,key-24+7,.3,.12);mus_bass(top+1.26,key-24,.8,.14);
+    [0,2,4].forEach(d=>mus_pluck(top+1.26,mus_deg(key-12,1+d),1,.05,'qin',true));
+  }else{ // comic 二人转 slide: "哎—呀—呀—" and a long droop, 小锣 bends, final 咚 当
+    const f=mus_mtof(key+12),seq=[[0,1,.3],[.34,.89,.3],[.68,.75,.3]];
+    for(const [dt,r,len] of seq){const o=mus_osc('sawtooth',f*r),g=AC.createGain(),tt=t+dt;
+      o.frequency.setValueAtTime(f*r*1.06,tt);o.frequency.exponentialRampToValueAtTime(f*r*.94,tt+len);
+      g.gain.setValueAtTime(0,tt);g.gain.linearRampToValueAtTime(.07,tt+.03);g.gain.linearRampToValueAtTime(0,tt+len);o.connect(g);g.connect(MUS.sBus);o.start(tt);o.stop(tt+len+.05)}
+    const tt=t+1.05,o=mus_osc('sawtooth',f*.67),g=AC.createGain(),lfo=mus_osc('sine',6.5),lg=AC.createGain();
+    o.frequency.setValueAtTime(f*.67,tt);o.frequency.setValueAtTime(f*.67,tt+.25);o.frequency.exponentialRampToValueAtTime(f*.3,tt+1.5);
+    lg.gain.value=f*.012;lfo.connect(lg);lg.connect(o.frequency);
+    g.gain.setValueAtTime(0,tt);g.gain.linearRampToValueAtTime(.08,tt+.04);g.gain.setValueAtTime(.08,tt+.9);g.gain.linearRampToValueAtTime(0,tt+1.55);
+    o.connect(g);g.connect(MUS.sBus);o.start(tt);lfo.start(tt);o.stop(tt+1.6);lfo.stop(tt+1.6);
+    mus_gong(t,.07,true);mus_gong(t+.68,.06,true);
+    mus_drum(t+2.75,.5);mus_bass(t+2.75,key-24,.5,.12);mus_gong(t+3.05,.09,true);mus_block(t+2.95,.06);
+  }
 }
+
+// ---------- 用我自己的音乐: local file → IndexedDB (only on this device) → looping <audio> ----------
+const MUS_DBN='xyxg',MUS_KEY='xyxg_bgm';
+function mus_db(){return new Promise((res,rej)=>{try{const r=indexedDB.open(MUS_DBN,1);
+  r.onupgradeneeded=()=>{try{r.result.createObjectStore('kv')}catch(e){}};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);r.onblocked=()=>rej(new Error('blocked'))}catch(e){rej(e)}})}
+function mus_dbDo(mode,fn){return mus_db().then(db=>new Promise((res,rej)=>{try{const tx=db.transaction('kv',mode),st=tx.objectStore('kv'),q=fn(st);
+  tx.oncomplete=()=>{res(q&&q.result);try{db.close()}catch(e){}};tx.onerror=tx.onabort=()=>{rej(tx.error);try{db.close()}catch(e){}}}catch(e){rej(e)}}))}
+function mus_readBuf(file){if(file.arrayBuffer)return file.arrayBuffer();
+  return new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.onerror=()=>rej(fr.error);fr.readAsArrayBuffer(file)})}
+function mus_el(){
+  if(MUS.el)return MUS.el;
+  const a=document.createElement('audio');a.loop=true;a.preload='auto';a.setAttribute('playsinline','');a.setAttribute('webkit-playsinline','');
+  MUS.el=a;return a;
+}
+function mus_route(){ // send the <audio> through WebAudio so volume works on iOS (element.volume is read-only there)
+  if(MUS.uRouted||!AC||!MUS.el)return;
+  try{const s=AC.createMediaElementSource(MUS.el),g=AC.createGain();g.gain.value=0;s.connect(g);g.connect(AC.destination);MUS.uGain=g;MUS.uRouted=true}catch(e){MUS.uRouted=true}
+}
+function mus_setUser(rec){ // rec: {name, url} or null
+  if(MUS.user&&MUS.user.url&&(!rec||rec.url!==MUS.user.url))try{URL.revokeObjectURL(MUS.user.url)}catch(e){}
+  MUS.user=rec;
+  const a=mus_el();
+  if(rec){a.src=rec.url;try{a.load()}catch(e){}}else{try{a.pause();a.removeAttribute('src');a.load()}catch(e){}}
+}
+function mus_userSync(){
+  const a=MUS.el;if(!a)return;
+  const play=MUS.useUser&&!!MUS.user&&MUS.on&&!document.hidden,vol=.9*MUS.duck;
+  MUS.uWant=play;
+  if(MUS.uGain&&AC)MUS.uGain.gain.setTargetAtTime(play?vol:0,AC.currentTime,.2);
+  else try{a.volume=play?vol:0}catch(e){}
+  if(play){if(a.paused){const p=a.play();if(p&&p.catch)p.catch(()=>{})}}
+  else if(!a.paused)try{a.pause()}catch(e){}
+}
+function mus_useUser(v){
+  MUS.useUser=v&&!!MUS.user;try{localStorage.setItem('xyxg_bgm_use',MUS.useUser?'1':'0')}catch(e){}
+  if(!MUS.useUser)MUS.cur=null; // restart the built-in theme from the top
+  mus_applyVol();mus_ui();
+}
+function mus_pickFile(file){
+  if(!file)return;
+  if(!/^audio\//.test(file.type||'audio/')&&!/\.(mp3|m4a|aac|wav|ogg|oga|flac|caf|aif+)$/i.test(file.name||'')){mus_note('这个文件不像音频，换一个试试');return}
+  let url;try{url=URL.createObjectURL(file)}catch(e){mus_note('无法读取这个文件');return}
+  mus_kick0();
+  mus_setUser({name:file.name||'我的音乐',url});mus_useUser(true);
+  mus_readBuf(file).then(buf=>mus_dbDo('readwrite',st=>st.put({buf,type:file.type||'',name:file.name||'我的音乐'},MUS_KEY)))
+    .then(()=>mus_ui()).catch(()=>mus_note('♪ '+(file.name||'')+' · 未能存到本机，仅本次有效'));
+}
+function mus_loadSaved(){
+  try{if(!window.indexedDB)return}catch(e){return}
+  mus_dbDo('readonly',st=>st.get(MUS_KEY)).then(r=>{
+    if(!r||MUS.user)return;
+    const blob=r.blob instanceof Blob?r.blob:new Blob([r.buf],{type:r.type||''});
+    mus_setUser({name:r.name||'我的音乐',url:URL.createObjectURL(blob)});
+    if(!MUS.useUser)mus_ui();else mus_useUser(true);
+  }).catch(()=>{});
+}
+// ---------- UI (pause menu) ----------
+function mus_note(txt){const n=$('pBgmName');if(n)n.textContent=txt}
+function mus_ui(){
+  try{
+    const seg=$('setBgm');if(seg)for(const b of seg.children)b.setAttribute('aria-checked',(b.dataset.v==='user')===(MUS.useUser&&!!MUS.user));
+    mus_note(MUS.user?'♪ '+MUS.user.name+' · 仅保存在本机':'可选手机里的歌作背景音乐 · 仅保存在本机');
+    const c=$('pBgmChg');if(c)c.hidden=!MUS.user;
+    const u=$('setBgm')&&$('setBgm').querySelector('[data-v="user"]');if(u)u.textContent=MUS.user?'自选':'自选…';
+    if($('pMusic'))$('pMusic').textContent='音乐：'+(MUS.on?'开':'关');
+  }catch(e){}
+}
+function mus_openPicker(){const f=$('pBgmFile');if(!f)return;try{f.value=''}catch(e){}f.click()}
 // start on first touch (browsers require a user gesture), pause when the page is hidden
-function mus_kick0(){initAudio();if(AC&&AC.state==='suspended')AC.resume().catch(()=>{});mus_init()}
+function mus_kick0(){initAudio();if(AC&&AC.state==='suspended')AC.resume().catch(()=>{});mus_init();mus_el();mus_route();mus_userSync()}
 document.addEventListener('pointerdown',mus_kick0,{capture:true});
+document.addEventListener('touchend',mus_kick0,{capture:true}); // iOS: media playback is unlocked on touchend
 document.addEventListener('keydown',mus_kick0,{capture:true});
-document.addEventListener('visibilitychange',()=>{if(!AC)return;if(document.hidden)AC.suspend().catch(()=>{});else AC.resume().catch(()=>{})});
-$('pMusic').onclick=()=>{mus_kick0();mus_setOn(!MUS.on);$('pMusic').textContent='音乐：'+(MUS.on?'开':'关')};
-$('pMusic').textContent='音乐：'+(MUS.on?'开':'关');
+document.addEventListener('visibilitychange',()=>{mus_userSync();if(!AC)return;if(document.hidden)AC.suspend().catch(()=>{});else AC.resume().catch(()=>{})});
+try{
+  $('pMusic').onclick=()=>{mus_kick0();mus_setOn(!MUS.on);mus_ui()};
+  const seg=$('setBgm');
+  if(seg)for(const b of seg.children)b.onclick=()=>{mus_kick0();
+    if(b.dataset.v==='builtin')mus_useUser(false);
+    else if(MUS.user&&!MUS.useUser)mus_useUser(true);
+    else mus_openPicker()};
+  if($('pBgmChg'))$('pBgmChg').onclick=()=>{mus_kick0();mus_openPicker()};
+  if($('pBgmFile'))$('pBgmFile').onchange=e=>{const f=e.target.files&&e.target.files[0];mus_pickFile(f)};
+}catch(e){}
+mus_ui();
+mus_loadSaved();
 </script>
 <script>
 /* ==== main.js ==== */
