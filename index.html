@@ -242,11 +242,12 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
         <button class="ghost" id="pRestart">重新开始</button>
         <button class="ghost" id="pMenu">返回选英雄</button>
       </div><div>
-      <style>#pause .mus_row{margin-bottom:2px}#pause .mus_note{display:flex;align-items:center;justify-content:flex-end;gap:6px;margin:0 0 8px;font-size:11px;color:var(--muted);min-width:0}
+      <style>#pause .mus_row{margin-bottom:2px}#pause .segS button{min-width:0;padding:0 8px}#pause .mus_note{display:flex;align-items:center;justify-content:flex-end;gap:6px;margin:0 0 8px;font-size:11px;color:var(--muted);min-width:0}
       #pause .mus_note span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}#pause .mus_note button{flex:none;border:0;background:none;color:var(--gold2);font-size:11px;font-weight:700;padding:4px 2px;text-decoration:underline}</style>
       <div class="setRow mus_row"><span>背景音乐</span><div class="seg" role="radiogroup" aria-label="背景音乐" id="setBgm"><button role="radio" data-v="builtin">内置</button><button role="radio" data-v="user">自选…</button></div></div>
-      <div class="mus_note"><span id="pBgmName">可选手机里的歌作背景音乐 · 仅保存在本机</span><button id="pBgmChg" hidden>换一首</button></div>
-      <input type="file" accept="audio/*" id="pBgmFile" hidden>
+      <div class="setRow mus_row"><span>曲目</span><div class="seg segS" role="radiogroup" aria-label="内置曲目" id="setTrack"><button role="radio" data-v="dongbei">东北</button><button role="radio" data-v="guofeng">国风</button><button role="radio" data-v="ballad">抒情</button><button role="radio" data-v="groove">律动</button><button role="radio" data-v="shuffle">轮播</button></div></div>
+      <div class="mus_note"><span id="pBgmName">可选手机里的多首歌做歌单 · 仅保存在本机</span><button id="pBgmNext" hidden>下一首</button><button id="pBgmChg" hidden>加歌</button><button id="pBgmClr" hidden>清空</button></div>
+      <input type="file" accept="audio/*" id="pBgmFile" multiple hidden>
       <div class="setRow"><span>按键大小</span><div class="seg" role="radiogroup" aria-label="按键大小" id="setSize"><button role="radio" data-v="s">小</button><button role="radio" data-v="m">中</button><button role="radio" data-v="l">大</button></div></div>
       <div class="setRow"><span>画质</span><div class="seg" role="radiogroup" aria-label="画质" id="setQ"><button role="radio" data-v="auto">自动</button><button role="radio" data-v="low">流畅</button><button role="radio" data-v="mid">均衡</button><button role="radio" data-v="high">高清</button></div></div>
       <div class="setRow"><span>移动摇杆</span><div class="seg" role="radiogroup" aria-label="摇杆模式" id="setJoy"><button role="radio" data-v="float">浮动</button><button role="radio" data-v="fixed">固定</button></div></div>
@@ -283,7 +284,7 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 // ================= constants & helpers =================
 // MAPK: battlefield scale. All map geography is authored in a 3000-unit frame and multiplied by MAPK
 // (unit sizes, attack/skill ranges, speeds and tower ranges are NOT scaled).
-const MAPK=1.25;
+const MAPK=1.5;
 const S=3000*MAPK, BLUE=0, RED=1, NEUT=2, TAU=Math.PI*2;
 const TEAMC=['#4aa3ff','#ff5d52','#c9a0ff'];
 const TEAMN=['蓝方','红方'];
@@ -380,7 +381,8 @@ function mkHero(d,team,isPlayer){
 }
 const buffSum=(u,k)=>{let s=0;for(const b of u.buffs)if(b.k===k)s+=b.v;return s};
 const effAspd=u=>Math.min(2.6,u.aspd*(1+(u.aspdBonus||0)+buffSum(u,'aspd')));
-const effMs=u=>(u.msBase||u.ms)*(1+buffSum(u,'ms'))*(u.slowT>0?1-u.slowAmt:1);
+const MS_K=1.14; // bigger map → everyone walks a bit faster so matches stay ~15 min
+const effMs=u=>(u.msBase||u.ms)*MS_K*(1+buffSum(u,'ms'))*(u.slowT>0?1-u.slowAmt:1);
 const xpNeed=l=>80+l*55;
 
 function isVuln(s){
@@ -399,7 +401,7 @@ function dealDamage(src,tgt,amt,o={}){
   if(tgt.invulnT>0)return 0;
   if(isStruct(tgt)&&!isVuln(tgt))return 0;
   let m=1;
-  if(src&&src.kind==='hero'){m=G.dmgMul[src.team];if(G.bossBuff&&G.bossBuff[src.team]>G.time)m*=1.15}
+  if(src&&src.kind==='hero'){m=G.dmgMul[src.team];if(G.bossBuff&&G.bossBuff[src.team]>G.time)m*=1.15;if(src.emberT>G.time)m*=1.12}
   for(const f of HOOKS.preDamage){const r=f(src,tgt,amt,o);if(typeof r==='number')amt=r}
   amt*=m*100/(100+Math.max(0,tgt.armor));
   if(tgt.shield>0){const a=Math.min(tgt.shield,amt);tgt.shield-=a;amt-=a}
@@ -482,6 +484,7 @@ function killUnitBase(t,src){
       const g=Math.round(m.gold*G.goldMul[killer.team]);killer.gold+=g;killer.goldTotal+=g;
       for(const h of G.heroes)if(h.alive&&h.team===killer.team&&d2(h.x,h.y,t.x,t.y)<1000*1000)giveXP(h,m.xp);
       if(killer===G.player)floatTxt(t.x,t.y-30,'+'+g,'#ffd66b',16);
+      if(m.buff){killer[m.buff+'T']=G.time+70;if(killer===G.player){floatTxt(killer.x,killer.y-60,m.bn,m.c,15);sfx(m.buff==='ember'?520:880,.25,'triangle',.05,1.5)}}
       if(m.boss){
         if(t.type==='colossus'){G.bossBuff=G.bossBuff||[0,0];G.bossBuff[killer.team]=G.time+90}
         else for(const h of G.heroes)if(h.team===killer.team){h.gold+=150;h.goldTotal+=150}
@@ -489,6 +492,7 @@ function killUnitBase(t,src){
       }
     }
   }else if(t.kind==='hero'){
+    {const kb=srcHero&&srcHero.team!==t.team?srcHero:null;for(const b of ['ember','frost'])if(t[b+'T']>G.time){if(kb)kb[b+'T']=G.time+70;t[b+'T']=0}}
     t.deaths++;t.streak=0;t.order=null;t.dash=null;t.recallT=0;t.buffs=[];t.stun=t.root=t.slowT=0;
     t.respawnAt=G.time+Math.min(30,5+t.level*1.7);
     const killer=srcHero&&srcHero.team!==t.team?srcHero:lastHero(t,null);
@@ -635,7 +639,7 @@ function update(dt){
     statusTick(h,dt);
     const g=GOLD_PS*G.goldMul[h.team]*dt;h.gold+=g;h.goldTotal+=g;giveXP(h,1.4*dt);
     h.hp=Math.min(h.maxHp,h.hp+h.regen*dt*(G.time-(h.combatT||-9)>5?2:1));
-    for(let i=0;i<4;i++)if(h.cds[i]>0)h.cds[i]-=dt;
+    {const cr=h.frostT>G.time?1.25:1;for(let i=0;i<4;i++)if(h.cds[i]>0)h.cds[i]-=dt*cr}
     if(h.recallT>0){h.recallT-=dt;if(h.recallT<=0){h.recallT=0;const F=FOUNT[h.team];fxRing(h.x,h.y,10,80,'#9fd0ff',.4);h.x=F.x;h.y=F.y;h.order=null;fxRing(h.x,h.y,80,10,'#9fd0ff',.4)}}
     if(G.over){h.order=null;continue}
     if(h.spellCd>0)h.spellCd-=dt;
@@ -1240,12 +1244,18 @@ function buildStructures(){
 // ---------- jungle ----------
 const CAMPS=[
  {x:820,y:1760,type:'wolf'},{x:1250,y:2240,type:'golem'},{x:2180,y:1240,type:'wolf'},{x:1750,y:760,type:'golem'},
- {x:930,y:930,type:'colossus'},{x:2070,y:2070,type:'drake'}
+ {x:930,y:930,type:'colossus'},{x:2070,y:2070,type:'drake'},
+ // buff spirits (赤炎灵 / 寒霜灵) and boars; blue side listed first, red side is the point mirror (S-x,S-y)
+ {x:600,y:1420,type:'ember'},{x:1580,y:2400,type:'frost'},{x:1020,y:1440,type:'boar'},{x:1560,y:1980,type:'boar'},
+ {x:2400,y:1580,type:'ember'},{x:1420,y:600,type:'frost'},{x:1980,y:1560,type:'boar'},{x:1440,y:1020,type:'boar'}
 ].map(c=>({...c,x:c.x*MAPK,y:c.y*MAPK}));
 const MON={
  wolf:{n:'影狼',hp:1300,atk:38,armor:15,r:30,gold:90,xp:80,c:'#7b8aa8',resp:60},
  golem:{n:'石魔',hp:1800,atk:46,armor:25,r:36,gold:110,xp:95,c:'#9a7a58',resp:60},
  colossus:{n:'远古石像',hp:5200,atk:95,armor:40,r:58,gold:120,xp:220,c:'#8f8aa0',resp:120,boss:true,reward:'全队获得 90 秒 15% 增伤'},
+ ember:{n:'赤炎灵',hp:2600,atk:58,armor:25,r:42,gold:130,xp:120,c:'#d8492e',resp:90,buff:'ember',bn:'赤炎之力：伤害+12%'},
+ frost:{n:'寒霜灵',hp:2600,atk:52,armor:28,r:42,gold:130,xp:120,c:'#4aa8e0',resp:90,buff:'frost',bn:'寒霜之力：冷却加快25%'},
+ boar:{n:'岩甲野猪',hp:1000,atk:30,armor:12,r:28,gold:75,xp:65,c:'#8a5a3a',resp:50},
  drake:{n:'炽焰飞蜥',hp:4600,atk:105,armor:35,r:54,gold:120,xp:220,c:'#d0663a',resp:120,boss:true,reward:'全队每人获得 150 金币'}
 };
 function buildCamps(){for(const c of CAMPS){const camp={...c,unit:null,respawnAt:c.type==='colossus'||c.type==='drake'?90:20};G.camps.push(camp)}}
@@ -2510,7 +2520,7 @@ function drawBars(){
       ctx.fillStyle='rgba(0,0,0,.75)';ctx.fillRect(x-17,y-3,15,13);ctx.fillStyle='#fff';ctx.font=`700 10px ${FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(u.level,x-9.5,y+3.5);
       ctx.font=`600 11px ${FONT}`;ctx.fillStyle=u.isPlayer?'#ffe39a':u.team===me.team?'#cfe6ff':'#ffd0cb';ctx.fillText(u.isPlayer?'你':u.name,sx,y-9);
     }
-    if(u.kind==='monster'&&u.boss){ctx.font=`600 11px ${FONT}`;ctx.fillStyle='#f3e2c0';ctx.textAlign='center';ctx.fillText(u.name,sx,y-8)}
+    if(u.kind==='monster'&&(u.boss||MON[u.type].buff)){ctx.font=`600 11px ${FONT}`;ctx.fillStyle='#f3e2c0';ctx.textAlign='center';ctx.fillText(u.name,sx,y-8)}
   }
 }
 function drawFx(){
@@ -2681,6 +2691,8 @@ function drawHUD(){
   ctx.textAlign='center';ctx.fillStyle='#c8d2e6';ctx.font=`700 12px ${FONT}`;const tm=Math.floor(G.time);ctx.fillText(`${String(tm/60|0).padStart(2,'0')}:${String(tm%60).padStart(2,'0')}`,W/2,sy+15);
   ctx.fillStyle='#8d9ab2';ctx.font=`600 8px ${FONT}`;ctx.fillText('战绩 ▾',W/2,sy+28);
   if(G.bossBuff&&G.bossBuff[h.team]>G.time){ctx.font=`600 10px ${FONT}`;ctx.fillStyle='#d8ccff';ctx.fillText(`石像祝福 ${Math.ceil(G.bossBuff[h.team]-G.time)}s`,W/2,sy+58)}
+  {let bx=W/2,bl=[];if(h.emberT>G.time)bl.push(['#ff8a5c',`赤炎 ${Math.ceil(h.emberT-G.time)}s`]);if(h.frostT>G.time)bl.push(['#8fd0ff',`寒霜 ${Math.ceil(h.frostT-G.time)}s`]);
+    if(bl.length){ctx.font=`600 10px ${FONT}`;ctx.textAlign='center';ctx.fillStyle=bl[0][0];ctx.fillText(bl.map(b=>b[1]).join('  '),bx,sy+(G.bossBuff&&G.bossBuff[h.team]>G.time?71:58));if(bl.length>1){}}}
   // team economy (经济总量) beside the score
   {const gb=ui_teamGold(BLUE),gr=ui_teamGold(RED),my2=h.team,lead=(my2===BLUE?gb-gr:gr-gb);
     ctx.font=`800 12px ${FONT}`;ctx.textBaseline='middle';
@@ -3914,7 +3926,7 @@ function M3_ruin(kind,team){
 // ======================= JUNGLE MONSTERS =======================
 function M3_monster(type,col,r,boss){
   col=col||'#888899';
-  const def={wolf:[m3w_monWolf,30,1.12],golem:[m3w_monGolem,36,1],colossus:[m3w_monColossus,58,1.1],drake:[m3w_monDrake,54,1.15]}[type];
+  const def={wolf:[m3w_monWolf,30,1.12],golem:[m3w_monGolem,36,1],colossus:[m3w_monColossus,58,1.1],drake:[m3w_monDrake,54,1.15],ember:[m3w_monGolem,36,1],frost:[m3w_monGolem,36,1],boar:[m3w_monWolf,30,1.05]}[type];
   if(!def)return m3w_monBlob(col,r||30,boss);
   const g=def[0](col),s=(r||def[1])/def[1]*def[2];g.children[0].scale.setScalar(s);g.userData.height*=s;return g;
 }
@@ -4428,6 +4440,7 @@ function r3_overlay(u){
   if(u.kind==='hero'){
     if(u.shield>0){ctx.strokeStyle='rgba(235,245,255,.8)';ctx.lineWidth=4;ctx.beginPath();ctx.arc(x,y,u.r*1.5+8,0,TAU);ctx.stroke();ctx.fillStyle='rgba(220,235,255,.12)';ctx.fill()}
     if(u.slowT>0||u.root>0){ctx.strokeStyle=u.root>0?'rgba(140,230,120,.9)':'rgba(150,210,255,.75)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,u.r*1.5+3,0,TAU);ctx.stroke()}
+    for(const[b,c]of[['ember','255,110,60'],['frost','110,200,255']])if(u[b+'T']>G.time){const a=.35+.2*Math.sin(G.time*5);ctx.strokeStyle=`rgba(${c},${a})`;ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,u.r*1.5+10+(b==='frost'?5:0),0,TAU);ctx.stroke()}
     if(u.recallT>0){const p=1-u.recallT/3;ctx.strokeStyle='rgba(140,200,255,.9)';ctx.lineWidth=5;ctx.beginPath();ctx.arc(x,y,u.r*1.5+16,-Math.PI/2,-Math.PI/2+p*TAU);ctx.stroke();ctx.fillStyle='rgba(140,200,255,.14)';ctx.beginPath();ctx.arc(x,y,u.r*1.5+16,0,TAU);ctx.fill()}
   }
   if(u.stun>0)drawStars(x,y-ui_hy(r3_top(u)+4));
@@ -4511,9 +4524,11 @@ function r3_syncQ(){const el=document.getElementById('setQ');if(!el)return;for(c
 // Also: "用我自己的音乐" — a local audio file chosen by the player, kept only in this device's IndexedDB.
 const MUS={on:true,cur:null,next:0,bi:0,step:0,loops:0,timer:0,master:null,bus:null,sBus:null,send:null,noise:null,
   intens:0,endPlayed:null,duck:1,restT:0,
-  useUser:false,user:null,el:null,uGain:null,uRouted:false,uWant:false};
+  useUser:false,user:null,list:[],li:0,el:null,uGain:null,uRouted:false,uWant:false,track:'dongbei',shuf:0,curKey:null};
 try{const v=localStorage.getItem('xyxg_music');if(v==='0')MUS.on=false}catch(e){}
 try{MUS.useUser=localStorage.getItem('xyxg_bgm_use')==='1'}catch(e){}
+try{const t=localStorage.getItem('xyxg_track');if(t&&MUS_TRACKS_OK(t))MUS.track=t}catch(e){}
+function MUS_TRACKS_OK(t){return['dongbei','guofeng','ballad','groove','shuffle'].includes(t)}
 const mus_mtof=m=>440*Math.pow(2,(m-69)/12);
 const MUS_SCALE=[0,2,4,5,7,9,11]; // major scale; melodies below only use 1 2 3 5 6 (pentatonic)
 
@@ -4582,6 +4597,40 @@ function mus_build(src){
   return{key:src.key,bpm:src.bpm,bars,introEnd};
 }
 const MUS_MENU=mus_build(MUS_MENU_SRC),MUS_WAR=mus_build(MUS_WAR_SRC);
+
+// ---------- more original tracks (different styles; all melodies written for this game) ----------
+// 青石巷 — 中国风 pop ballad: 古筝 arpeggios, 笛子 lead, soft beat. C major notes centred on 6 (A minor feel), 78 bpm.
+const MUS_GF_SRC={key:60,bpm:78,style:'guofeng',
+  A:{mel:"6:4 1':2 2':2 3':6 2':2 | 1':2 2':2 1':2 6:2 5:8 | 3:4 5:2 6:2 1':4 6:2 5:2 | 3:2 5:2 2:4 ~3:8 |"+
+    " 6:4 1':2 2':2 3':4 5':2 3':2 | 2':2 3':2 2':2 1':2 6:8 | 5:2 6:2 1':2 2':2 3':3 2':1 1':2 6:2 | 5:2 3:2 5:4 ~6:8",
+    harm:"6 6|4 5|1 1|2 3|6 4|5 1|4 5|6 6",lead:'zheng'},
+  B:{mel:"3':4 5':4 6':2 5':2 3':4 | 2':2 3':2 5':2 3':2 2':4 1':4 | 6:2 1':2 2':4 3':2 2':2 1':4 | 6:2 5:2 ~6:12 |"+
+    " 3':4 5':4 6':2 1'':2 6':4 | 5':2 6':2 5':2 3':2 2':8 | 1':2 2':2 3':2 5':2 3':2 2':2 1':2 2':2 | 6:3 5:1 6:4 ~6:8",
+    harm:"4 5|3 6|4 5|3 6|4 5|3 6|2 5|6 6",lead:'dizi'},
+  form:['A','B','A','B']};
+// 星光慢 — piano ballad: piano arpeggios + strings pad, soft voice-like lead. F major, 72 bpm.
+const MUS_BL_SRC={key:65,bpm:72,style:'ballad',
+  A:{mel:"3:4 3:2 4:2 5:4 3:4 | 2:4 1:2 2:2 3:8 | 1:4 1:2 2:2 3:4 1:2 6,:2 | 1:4 7,:2 1:2 2:8 |"+
+    " 3:4 3:2 4:2 5:4 1':4 | 7:4 6:2 5:2 5:8 | 4:4 4:2 5:2 6:4 5:2 4:2 | 3:4 2:4 1:8",
+    harm:"1 5|6 3|4 1|4 5|1 5|6 3|4 1|5 1",lead:'piano'},
+  B:{mel:"5:2 6:2 1':4 1':2 7:2 1':4 | 2':4 1':2 7:2 6:4 5:4 | 4:2 5:2 6:4 6:2 5:2 6:2 1':2 | 1':4 7:2 6:2 5:8 |"+
+    " 5:2 6:2 1':4 1':2 7:2 1':2 3':2 | 3':4 2':2 1':2 6:4 1':4 | 2':4 1':2 6:2 1':4 2':4 | 1':16",
+    harm:"4 5|3 6|2 5|1 1|4 5|3 6|4 5|1 1",lead:'voice'},
+  form:['A','B','A','B']};
+// 夜行列车 — city R&B / hip-hop groove: boom-bap drums, electric-piano 7th chords, sub bass. E♭ major notes centred on 6, 88 bpm.
+const MUS_GR_SRC={key:63,bpm:88,style:'groove',
+  A:{mel:"0:4 3':2 3':2 3':2 2':2 1':2 6:2 | 1':4 6:4 0:8 | 0:4 3':2 3':2 5':2 3':2 2':2 1':2 | 2':4 3':2 2':2 ~6:8 |"+
+    " 0:2 6:2 1':2 2':2 3':4 5':2 3':2 | 2':2 1':2 2':4 3':8 | 0:2 6:2 1':2 2':2 3':2 2':2 1':2 2':2 | ~6:12 0:4",
+    harm:"4 3|6 6|4 3|2 3|4 3|6 6|4 5|6 6",lead:'whistle'},
+  B:{mel:"6:2 0:2 6:2 1':2 0:2 6:2 5:2 3:2 | 5:6 3:2 ~6:8 | 6:2 0:2 6:2 1':2 0:2 2':2 3':2 5':2 | 3':6 2':2 1':8 |"+
+    " 6:2 0:2 6:2 1':2 0:2 6:2 5:2 3:2 | 5:6 3:2 ~6:8 | 1':2 2':2 3':2 5':2 6':4 5':2 3':2 | ~6':12 0:4",
+    harm:"4 4|6 6|4 4|5 5|4 4|6 6|2 3|6 6",lead:'keys'},
+  form:['A','B','A','B']};
+const MUS_SONGS={guofeng:mus_build(MUS_GF_SRC),ballad:mus_build(MUS_BL_SRC),groove:mus_build(MUS_GR_SRC)};
+for(const k in MUS_SONGS)MUS_SONGS[k].style=k;
+MUS_MENU.style=MUS_WAR.style='dongbei';
+const MUS_TRACKS={dongbei:'东北',guofeng:'国风',ballad:'抒情',groove:'律动',shuffle:'轮播'};
+const MUS_SHUF=['dongbei','guofeng','ballad','groove'];
 
 // ---------- engine ----------
 function mus_init(){
@@ -4679,7 +4728,103 @@ function mus_lanes(L,step,t,vs){
   if(a=at('g'))mus_gong(t,.07*a*vs,true);if(a=at('K'))mus_block(t,.06*a*vs);
 }
 
+// ---------- instruments for the pop-style tracks ----------
+// piano: triangle + sine partials, struck decay
+function mus_piano(t,m,len,v,wet){const f=mus_mtof(m),g=AC.createGain(),d=Math.min(len+1.1,2.6);
+  for(const[r,a,ty]of[[1,1,'triangle'],[2,.32,'sine'],[3,.1,'sine']]){const o=mus_osc(ty,f*r*(r>1?1.002:1)),og=AC.createGain();og.gain.value=a;o.connect(og);og.connect(g);o.start(t);o.stop(t+d+.05)}
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+.006);g.gain.exponentialRampToValueAtTime(v*.35,t+.35);g.gain.exponentialRampToValueAtTime(.0001,t+d);
+  g.connect(MUS.bus);if(wet)g.connect(MUS.send)}
+// strings / synth pad: detuned saws, slow swell
+function mus_pad(t,notes,len,v){const g=AC.createGain(),f=AC.createBiquadFilter();f.type='lowpass';f.frequency.value=1100;f.Q.value=.4;f.connect(g);
+  for(const m of notes)for(const dt of[-7,7]){const o=mus_osc('sawtooth',mus_mtof(m));o.detune.value=dt;o.connect(f);o.start(t);o.stop(t+len+.7)}
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+Math.min(.45,len*.5));g.gain.setValueAtTime(v,t+len);g.gain.linearRampToValueAtTime(0,t+len+.6);g.connect(MUS.bus);g.connect(MUS.send)}
+// 笛子 / soft voice: sine + triangle, delayed vibrato, breathy attack
+function mus_flute(t,m,len,v,orn,breath){const f=mus_mtof(m),o=mus_osc('sine',f),o2=mus_osc('triangle',f*2),g=AC.createGain(),g2=AC.createGain(),fr=o.frequency;
+  g2.gain.value=breath?.18:.08;o2.connect(g2);g2.connect(g);o.connect(g);
+  if(orn==='~'){fr.setValueAtTime(f*.89,t);fr.exponentialRampToValueAtTime(f,t+.12);o2.frequency.setValueAtTime(f*1.78,t);o2.frequency.exponentialRampToValueAtTime(f*2,t+.12)}
+  else if(orn==='^'){fr.setValueAtTime(f*1.12,t);fr.setValueAtTime(f,t+.06)}
+  const end=t+len;
+  if(len>.35){const lfo=mus_osc('sine',5.2),lg=AC.createGain(),lg2=AC.createGain();lg.gain.setValueAtTime(0,t);lg.gain.linearRampToValueAtTime(f*.012,t+Math.min(.5,len*.7));lg2.gain.value=2;
+    lfo.connect(lg);lg.connect(fr);lg.connect(lg2);lg2.connect(o2.frequency);lfo.start(t);lfo.stop(end+.2)}
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+(breath?.05:.08));g.gain.setValueAtTime(v,Math.max(t+.09,end-.08));g.gain.linearRampToValueAtTime(0,end+.12);
+  g.connect(MUS.bus);g.connect(MUS.send);o.start(t);o2.start(t);o.stop(end+.15);o2.stop(end+.15);
+  if(breath)mus_nz(t,v*.25,.08,3200,'bandpass',.9)}
+// 古筝: bright pluck with a little pitch bend, ringing decay
+function mus_zheng(t,m,len,v,orn){const f=mus_mtof(m),o=mus_osc('sawtooth',f),o2=mus_osc('triangle',f),fl=AC.createBiquadFilter(),g=AC.createGain(),d=Math.min(len+.9,2.2);
+  fl.type='lowpass';fl.Q.value=1.5;fl.frequency.setValueAtTime(3800,t);fl.frequency.exponentialRampToValueAtTime(700,t+.5);
+  if(orn==='~'){o.frequency.setValueAtTime(f*.94,t);o.frequency.exponentialRampToValueAtTime(f,t+.16);o2.frequency.setValueAtTime(f*.94,t);o2.frequency.exponentialRampToValueAtTime(f,t+.16)}
+  const og=AC.createGain();og.gain.value=.45;o.connect(og);og.connect(fl);o2.connect(fl);fl.connect(g);
+  g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(v*.4,t+.15);g.gain.exponentialRampToValueAtTime(.0001,t+d);
+  g.connect(MUS.bus);g.connect(MUS.send);o.start(t);o2.start(t);o.stop(t+d+.05);o2.stop(t+d+.05)}
+// electric piano (FM sine), 7th-chord friendly
+function mus_ep(t,m,len,v){const f=mus_mtof(m),c=mus_osc('sine',f),md=mus_osc('sine',f),mg=AC.createGain(),g=AC.createGain(),d=Math.min(len+.5,1.8);
+  mg.gain.setValueAtTime(f*1.1,t);mg.gain.exponentialRampToValueAtTime(f*.08,t+.3);md.connect(mg);mg.connect(c.frequency);c.connect(g);
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+.008);g.gain.exponentialRampToValueAtTime(v*.4,t+.4);g.gain.exponentialRampToValueAtTime(.0001,t+d);
+  g.connect(MUS.bus);g.connect(MUS.send);c.start(t);md.start(t);c.stop(t+d+.05);md.stop(t+d+.05)}
+function mus_sub(t,m,len,v){const o=mus_osc('triangle',mus_mtof(m)),o2=mus_osc('sine',mus_mtof(m)),g=AC.createGain();o.connect(g);o2.connect(g);
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+.012);g.gain.setValueAtTime(v*.8,t+Math.max(.02,len-.05));g.gain.linearRampToValueAtTime(0,t+len+.04);
+  g.connect(MUS.bus);o.start(t);o2.start(t);o.stop(t+len+.06);o2.stop(t+len+.06)}
+function mus_kick(t,v){const o=mus_osc('sine',150),g=AC.createGain();o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(44,t+.12);
+  g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.0001,t+.32);o.connect(g);g.connect(MUS.bus);o.start(t);o.stop(t+.34)}
+function mus_snare(t,v,rim){if(rim){const o=mus_osc('triangle',820),g=AC.createGain();g.gain.setValueAtTime(v*.8,t);g.gain.exponentialRampToValueAtTime(.0001,t+.05);o.connect(g);g.connect(MUS.bus);o.start(t);o.stop(t+.06);return}
+  mus_nz(t,v,.16,1900,'bandpass',.6);const o=mus_osc('triangle',190),g=AC.createGain();g.gain.setValueAtTime(v*.6,t);g.gain.exponentialRampToValueAtTime(.0001,t+.08);o.connect(g);g.connect(MUS.bus);o.start(t);o.stop(t+.1)}
+function mus_hat(t,v,open){mus_nz(t,v,open?.2:.035,7500,'highpass',.5)}
+function mus_chord7(key,d){return[mus_deg(key,d),mus_deg(key,d+2),mus_deg(key,d+4),mus_deg(key,d+6)]}
+
+// pop-style tracks: one generic arranger, flavoured by style
+function mus_play2(s,B,step,t,sp,war){
+  const st=s.style,key=s.key,I=war?MUS.intens:0,loops=MUS.loops,half=step>>3,root=B.h[half],sec2=B.sec==='B';
+  const sw=st==='groove'&&step%2===1?sp*.16:0,tt=t+sw;
+  // ---- drums ----
+  if(st==='guofeng'){
+    if(step===0||step===10)mus_kick(t,.34);if(sec2||war){if(step===4||step===12)mus_snare(t,.07,!sec2);}else if(step===8)mus_snare(t,.05,true);
+    if(step%2===0)mus_hat(t,step%4===0?.022:.014);
+    if(war&&I>.5&&step%4===3)mus_hat(t,.012);
+    if(B.i===0&&step===0)mus_gong(t,.05,true);
+  }else if(st==='ballad'){
+    if(sec2||war){if(step===0||step===10)mus_kick(t,.22);if(step===4||step===12)mus_snare(t,.06);if(step%2===0)mus_hat(t,.012)}
+    else if(step===0)mus_kick(t,.18);
+  }else{ // groove (boom-bap)
+    if(step===0||step===6||step===10||(step===15&&B.i%2===1))mus_kick(t,step===0?.26:.2);
+    if(step===4||step===12)mus_snare(t,.08);
+    if(step%2===0)mus_hat(t,step%4===2?.03:.02,step===14&&B.i%4===3);else if(I>.3||sec2)mus_hat(tt,.01);
+    if(step===7&&B.i%2===0)mus_snare(tt,.03,true);
+  }
+  // ---- bass ----
+  const bk=key-24,br=mus_deg(bk,root);
+  if(st==='groove'){if(step===0||step===6||step===10)mus_sub(t,br,sp*(step===6?3.5:2.5),.11);if(step===14)mus_sub(t,br+12,sp,.08)}
+  else if(step%8===0)mus_sub(t,br,sp*(st==='ballad'?7:5),st==='ballad'?.09:.12);
+  else if(st==='guofeng'&&step%8===6)mus_sub(t,mus_deg(bk,root+4),sp*2,.08);
+  // ---- harmony ----
+  if(st==='guofeng'){ // 古筝 16th arpeggio over two octaves, pentatonic-ish shape
+    const tri=mus_triad(key-12,root),pat=[0,1,2,4,5,4,2,1],n=pat[step&7],nt=n<3?tri[n]:tri[n-3]+12;
+    if(step%2===0||sec2)mus_zheng(t,nt+(n>=3?0:0),sp*2,step%4===0?.045:.03);
+    if(step%8===0)mus_pad(t,mus_triad(key-12,root),sp*7.5,.018);
+  }else if(st==='ballad'){ // piano broken chords in eighths + strings
+    const tri=mus_triad(key-12,root),seq=[mus_deg(bk+12,root),tri[0],tri[1],tri[2],tri[0]+12,tri[2],tri[1],tri[0]];
+    if(step%2===0)mus_piano(t,seq[(step>>1)&7],sp*2,step%8===0?.06:.04,true);
+    if(step%8===0&&(sec2||loops%2===1||war))mus_pad(t,mus_triad(key,root),sp*7.5,.02);
+  }else{ // groove: electric-piano 7th chords on the off-beat stabs
+    const ch=mus_chord7(key-12,root);
+    if(step===0||step===8)for(const m of ch)mus_ep(t,m,sp*3,.028);
+    if(step===3||step===11||(sec2&&step===14))for(const m of ch.slice(1))mus_ep(tt,m+12,sp,.016);
+    if(sec2&&step%8===0)mus_pad(t,ch.slice(0,3),sp*7.5,.012);
+  }
+  // ---- melody ----
+  for(const e of B.mel)if(e[0]===step){
+    const len=sp*e[2],m=e[1],o=e[3];
+    if(B.lead==='zheng'){mus_zheng(t,m,len,.11,o);if(loops%2===1||war)mus_flute(t,m+12,len*.95,.035,o)}
+    else if(B.lead==='dizi'){mus_flute(t,m+12,len*.95,.07,o,true);mus_zheng(t,m,len,.04)}
+    else if(B.lead==='piano'){mus_piano(t,m+12,len,.11,true);if(loops%2===1)mus_flute(t,m,len*.95,.03,o)}
+    else if(B.lead==='voice'){mus_flute(t,m+12,len*.95,.075,o);mus_piano(t,m+12,len,.06,true)}
+    else if(B.lead==='whistle'){mus_flute(tt,m+12,len*.9,.06,o);mus_ep(tt,m+12,len,.025)}
+    else{mus_ep(tt,m+12,len,.07);mus_ep(tt,m,len,.03)}
+  }
+}
 // ---------- scheduler ----------
+function mus_song(){const tr=MUS.track==='shuffle'?MUS_SHUF[MUS.shuf%MUS_SHUF.length]:MUS.track;
+  if(tr==='dongbei'||!MUS_SONGS[tr])return MUS.cur==='war'?MUS_WAR:MUS_MENU;return MUS_SONGS[tr]}
+function mus_setTrack(t){if(!MUS_TRACKS_OK(t))return;MUS.track=t;MUS.shuf=0;try{localStorage.setItem('xyxg_track',t)}catch(e){}if(MUS.useUser)mus_useUser(false);mus_ui()}
 function mus_want(){if(state==='play'&&G&&!G.over)return'war';return'menu'}
 function mus_tick(){
   if(!AC||!MUS.master)return;
@@ -4691,18 +4836,22 @@ function mus_tick(){
   // end-of-game stinger
   if(G&&G.over&&MUS.endPlayed!==G){MUS.endPlayed=G;if(MUS.on)mus_sting(G.player&&G.winner===G.player.team);MUS.cur='rest';MUS.restT=AC.currentTime+4.5;return}
   if(MUS.cur==='rest'){if(AC.currentTime<MUS.restT)return;MUS.cur=null}
-  if(want!==MUS.cur){MUS.cur=want;MUS.bi=0;MUS.step=0;MUS.loops=0;MUS.next=AC.currentTime+.1}
+  const ck=want+'|'+MUS.track;
+  if(want!==MUS.cur||ck!==MUS.curKey){const same=MUS.track!=='dongbei'&&MUS.cur&&MUS.curKey&&MUS.curKey.split('|')[1]===MUS.track;MUS.cur=want;MUS.curKey=ck;
+    if(!same){MUS.bi=0;MUS.step=0;MUS.loops=0;MUS.next=AC.currentTime+.1}} // pop tracks keep playing across menu→battle
   if(!MUS.on){MUS.next=AC.currentTime+.1;return}
   // battle intensity: player in combat recently, or late game
   if(want==='war'&&G&&G.player){const h=G.player,recent=h.alive&&Object.values(h.lastDmg||{}).some(t=>G.time-t<4)||(G.time-(h.ui_lastHitT||-9)<3);
     const target=(recent?1:0)+(G.time>600?.35:0);MUS.intens+=(target-MUS.intens)*.15}
   if(want==='menu')MUS.intens=0;
-  const song=MUS.cur==='war'?MUS_WAR:MUS_MENU,sp=60/song.bpm/4;
+  let song=mus_song();
   if(MUS.next<AC.currentTime-.2)MUS.next=AC.currentTime+.05; // timer stalled (background tab): don't burst-schedule
   while(MUS.next<AC.currentTime+.35){
-    try{mus_play(song,MUS.cur,song.bars[MUS.bi],MUS.step,MUS.next,sp)}catch(e){}
+    const sp=60/song.bpm/4,B=song.bars[MUS.bi]||song.bars[0];
+    try{if(song.style==='dongbei')mus_play(song,MUS.cur,B,MUS.step,MUS.next,sp);else mus_play2(song,B,MUS.step,MUS.next,sp,MUS.cur==='war')}catch(e){}
     MUS.next+=sp;
-    if(++MUS.step>=16){MUS.step=0;if(++MUS.bi>=song.bars.length){MUS.bi=song.introEnd;MUS.loops++}}
+    if(++MUS.step>=16){MUS.step=0;if(++MUS.bi>=song.bars.length){MUS.loops++;
+      if(MUS.track==='shuffle'){MUS.shuf++;MUS.bi=0;song=mus_song();MUS.next+=.6}else MUS.bi=song.introEnd}}
   }
 }
 function mus_play(s,kind,B,step,t,sp){
@@ -4778,8 +4927,8 @@ function mus_sting(win){
   }
 }
 
-// ---------- 用我自己的音乐: local file → IndexedDB (only on this device) → looping <audio> ----------
-const MUS_DBN='xyxg',MUS_KEY='xyxg_bgm';
+// ---------- 我的歌单: local files → IndexedDB (only on this device) → <audio>, plays in order and loops the list ----------
+const MUS_DBN='xyxg',MUS_KEY='xyxg_bgm',MUS_LKEY='xyxg_bgm_list',MUS_MAX=20;
 function mus_db(){return new Promise((res,rej)=>{try{const r=indexedDB.open(MUS_DBN,1);
   r.onupgradeneeded=()=>{try{r.result.createObjectStore('kv')}catch(e){}};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);r.onblocked=()=>rej(new Error('blocked'))}catch(e){rej(e)}})}
 function mus_dbDo(mode,fn){return mus_db().then(db=>new Promise((res,rej)=>{try{const tx=db.transaction('kv',mode),st=tx.objectStore('kv'),q=fn(st);
@@ -4788,18 +4937,20 @@ function mus_readBuf(file){if(file.arrayBuffer)return file.arrayBuffer();
   return new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.onerror=()=>rej(fr.error);fr.readAsArrayBuffer(file)})}
 function mus_el(){
   if(MUS.el)return MUS.el;
-  const a=document.createElement('audio');a.loop=true;a.preload='auto';a.setAttribute('playsinline','');a.setAttribute('webkit-playsinline','');
+  const a=document.createElement('audio');a.preload='auto';a.setAttribute('playsinline','');a.setAttribute('webkit-playsinline','');
+  a.addEventListener('ended',()=>{if(MUS.list.length>1)mus_goto(MUS.li+1,true);else{try{a.currentTime=0;mus_userSync()}catch(e){}}});
+  a.addEventListener('error',()=>{if(MUS.list.length>1&&MUS.useUser)setTimeout(()=>mus_goto(MUS.li+1,true),400)});
   MUS.el=a;return a;
 }
 function mus_route(){ // send the <audio> through WebAudio so volume works on iOS (element.volume is read-only there)
   if(MUS.uRouted||!AC||!MUS.el)return;
   try{const s=AC.createMediaElementSource(MUS.el),g=AC.createGain();g.gain.value=0;s.connect(g);g.connect(AC.destination);MUS.uGain=g;MUS.uRouted=true}catch(e){MUS.uRouted=true}
 }
-function mus_setUser(rec){ // rec: {name, url} or null
-  if(MUS.user&&MUS.user.url&&(!rec||rec.url!==MUS.user.url))try{URL.revokeObjectURL(MUS.user.url)}catch(e){}
-  MUS.user=rec;
-  const a=mus_el();
-  if(rec){a.src=rec.url;try{a.load()}catch(e){}}else{try{a.pause();a.removeAttribute('src');a.load()}catch(e){}}
+function mus_goto(i,play){ // switch the <audio> to song i of the list
+  const L=MUS.list;if(!L.length){MUS.user=null;const a=mus_el();try{a.pause();a.removeAttribute('src');a.load()}catch(e){}mus_ui();return}
+  MUS.li=((i%L.length)+L.length)%L.length;MUS.user=L[MUS.li];
+  const a=mus_el();a.loop=L.length===1;a.src=MUS.user.url;try{a.load()}catch(e){}
+  if(play)mus_userSync();mus_ui();
 }
 function mus_userSync(){
   const a=MUS.el;if(!a)return;
@@ -4815,21 +4966,35 @@ function mus_useUser(v){
   if(!MUS.useUser)MUS.cur=null; // restart the built-in theme from the top
   mus_applyVol();mus_ui();
 }
-function mus_pickFile(file){
-  if(!file)return;
-  if(!/^audio\//.test(file.type||'audio/')&&!/\.(mp3|m4a|aac|wav|ogg|oga|flac|caf|aif+)$/i.test(file.name||'')){mus_note('这个文件不像音频，换一个试试');return}
-  let url;try{url=URL.createObjectURL(file)}catch(e){mus_note('无法读取这个文件');return}
+const mus_isAudio=f=>/^audio\//.test(f.type||'')||/\.(mp3|m4a|aac|wav|ogg|oga|flac|caf|aif+|opus)$/i.test(f.name||'');
+function mus_save(){ // whole list in one record; a failure (e.g. storage full) only affects persistence
+  return Promise.all(MUS.list.map(r=>r.buf?Promise.resolve(r.buf):fetch(r.url).then(x=>x.arrayBuffer()).then(b=>(r.buf=b))))
+    .then(()=>mus_dbDo('readwrite',st=>{st.put(MUS.list.map(r=>({buf:r.buf,type:r.type||'',name:r.name})),MUS_LKEY);st.delete(MUS_KEY)}));
+}
+function mus_pickFiles(files){
+  files=[...(files||[])].filter(mus_isAudio);
+  if(!files.length){mus_note('没有选到音频文件，换一个试试');return}
   mus_kick0();
-  mus_setUser({name:file.name||'我的音乐',url});mus_useUser(true);
-  mus_readBuf(file).then(buf=>mus_dbDo('readwrite',st=>st.put({buf,type:file.type||'',name:file.name||'我的音乐'},MUS_KEY)))
-    .then(()=>mus_ui()).catch(()=>mus_note('♪ '+(file.name||'')+' · 未能存到本机，仅本次有效'));
+  const room=MUS_MAX-MUS.list.length;if(room<=0){mus_note(`歌单最多 ${MUS_MAX} 首，先清空再加`);return}
+  const add=files.slice(0,room),first=MUS.list.length;
+  for(const f of add){let url;try{url=URL.createObjectURL(f)}catch(e){continue}MUS.list.push({name:(f.name||'我的音乐').replace(/\.[^.]+$/,''),url,type:f.type||'',file:f})}
+  if(MUS.list.length===first){mus_note('无法读取这些文件');return}
+  mus_goto(first,false);mus_useUser(true);
+  Promise.all(MUS.list.map(r=>r.buf||!r.file?null:mus_readBuf(r.file).then(b=>{r.buf=b}))).then(mus_save)
+    .then(()=>mus_ui()).catch(()=>mus_note('♪ 歌单未能存到本机（空间不够？），仅本次有效'));
+}
+function mus_clear(){
+  for(const r of MUS.list)try{URL.revokeObjectURL(r.url)}catch(e){}
+  MUS.list=[];MUS.li=0;mus_goto(0);mus_useUser(false);
+  mus_dbDo('readwrite',st=>{st.delete(MUS_LKEY);st.delete(MUS_KEY)}).catch(()=>{});
 }
 function mus_loadSaved(){
   try{if(!window.indexedDB)return}catch(e){return}
-  mus_dbDo('readonly',st=>st.get(MUS_KEY)).then(r=>{
-    if(!r||MUS.user)return;
-    const blob=r.blob instanceof Blob?r.blob:new Blob([r.buf],{type:r.type||''});
-    mus_setUser({name:r.name||'我的音乐',url:URL.createObjectURL(blob)});
+  mus_dbDo('readonly',st=>st.get(MUS_LKEY)).then(arr=>arr&&arr.length?arr:mus_dbDo('readonly',st=>st.get(MUS_KEY)).then(r=>r?[r]:null)).then(arr=>{
+    if(!arr||MUS.list.length)return;
+    for(const r of arr){const blob=r.blob instanceof Blob?r.blob:new Blob([r.buf],{type:r.type||''});
+      MUS.list.push({name:(r.name||'我的音乐').replace(/\.[^.]+$/,''),url:URL.createObjectURL(blob),type:r.type||'',buf:r.buf})}
+    mus_goto(0,false);
     if(!MUS.useUser)mus_ui();else mus_useUser(true);
   }).catch(()=>{});
 }
@@ -4837,10 +5002,14 @@ function mus_loadSaved(){
 function mus_note(txt){const n=$('pBgmName');if(n)n.textContent=txt}
 function mus_ui(){
   try{
-    const seg=$('setBgm');if(seg)for(const b of seg.children)b.setAttribute('aria-checked',(b.dataset.v==='user')===(MUS.useUser&&!!MUS.user));
-    mus_note(MUS.user?'♪ '+MUS.user.name+' · 仅保存在本机':'可选手机里的歌作背景音乐 · 仅保存在本机');
-    const c=$('pBgmChg');if(c)c.hidden=!MUS.user;
-    const u=$('setBgm')&&$('setBgm').querySelector('[data-v="user"]');if(u)u.textContent=MUS.user?'自选':'自选…';
+    const on=MUS.useUser&&!!MUS.user,n=MUS.list.length;
+    const seg=$('setBgm');if(seg)for(const b of seg.children)b.setAttribute('aria-checked',(b.dataset.v==='user')===on);
+    const tg=$('setTrack');if(tg)for(const b of tg.children)b.setAttribute('aria-checked',!on&&b.dataset.v===MUS.track);
+    mus_note(MUS.user?`♪ ${MUS.user.name}${n>1?` (${MUS.li+1}/${n})`:''} · 仅保存在本机`:'可选手机里的多首歌做歌单 · 仅保存在本机');
+    const c=$('pBgmChg');if(c){c.hidden=!n;c.textContent='加歌'}
+    const nx=$('pBgmNext');if(nx)nx.hidden=!(on&&n>1);
+    const cl=$('pBgmClr');if(cl)cl.hidden=!n;
+    const u=$('setBgm')&&$('setBgm').querySelector('[data-v="user"]');if(u)u.textContent=n?`我的歌单(${n})`:'自选…';
     if($('pMusic'))$('pMusic').textContent='音乐：'+(MUS.on?'开':'关');
   }catch(e){}
 }
@@ -4858,8 +5027,11 @@ try{
     if(b.dataset.v==='builtin')mus_useUser(false);
     else if(MUS.user&&!MUS.useUser)mus_useUser(true);
     else mus_openPicker()};
+  const tg=$('setTrack');if(tg)for(const b of tg.children)b.onclick=()=>{mus_kick0();mus_setTrack(b.dataset.v)};
   if($('pBgmChg'))$('pBgmChg').onclick=()=>{mus_kick0();mus_openPicker()};
-  if($('pBgmFile'))$('pBgmFile').onchange=e=>{const f=e.target.files&&e.target.files[0];mus_pickFile(f)};
+  if($('pBgmNext'))$('pBgmNext').onclick=()=>{mus_kick0();mus_goto(MUS.li+1,true)};
+  if($('pBgmClr'))$('pBgmClr').onclick=()=>{mus_kick0();mus_clear()};
+  if($('pBgmFile'))$('pBgmFile').onchange=e=>mus_pickFiles(e.target.files);
 }catch(e){}
 mus_ui();
 mus_loadSaved();
