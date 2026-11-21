@@ -108,6 +108,16 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .item.rec{border-color:rgba(242,195,91,.7);box-shadow:0 0 0 1px rgba(242,195,91,.35) inset}
 .item.rec b::after{content:" 推荐";font-size:10px;color:var(--gold)}
 .pauseList{display:grid;gap:8px;max-width:340px;margin:0 auto;width:100%}
+#menuFull{position:absolute;z-index:3;top:calc(env(safe-area-inset-top,0px) + 8px);right:calc(env(safe-area-inset-right,0px) + 10px);color:var(--gold2);border-color:rgba(242,195,91,.45)}
+#fsGuide .panel{max-height:100%;overflow:auto}
+.fsLead{font-size:13px;line-height:1.6;margin:4px 0 10px;color:var(--fg)}.fsLead b{color:var(--gold2)}
+.fsSteps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fsSteps li{display:flex;gap:10px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px}
+.fsSteps i{flex:0 0 26px;height:26px;border-radius:50%;background:var(--gold);color:#2b1a00;font-style:normal;font-weight:800;display:grid;place-items:center}
+.fsSteps b{display:flex;align-items:center;gap:6px;font-size:14px;margin-bottom:3px}.fsSteps span{font-size:12px;color:var(--muted);line-height:1.5;display:block}
+.fsSteps .ico{display:inline-grid;place-items:center;color:#4aa3ff}
+.fsNote{font-size:11px;color:var(--muted);margin:10px 0 0}
+@media (max-width:560px){.fsSteps{grid-template-columns:1fr}}
 .cheatGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.cheatGrid .ghost{height:44px;font-size:14px}.cheatGrid .ghost[aria-checked="true"]{border-color:var(--gold);background:#3a2c0e;color:var(--gold2)}
 #btnCheat{color:#ffb4a8}
 @media (max-width:560px){.cheatGrid{grid-template-columns:1fr 1fr}}
@@ -159,6 +169,7 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
   <button id="quickBuy" hidden aria-label="快速购买推荐装备"><div class="ico" id="qbIco"></div><div id="qbName">装备</div><div class="pr" id="qbPrice">0</div></button>
 
   <section id="menu" class="screen">
+    <button class="hbtn" id="menuFull" aria-label="全屏玩法">⛶ 全屏玩</button>
     <div class="menuWrap">
       <div class="brand">
         <div class="eyebrow">5V5 · 三路推塔 · 单机对战</div>
@@ -205,6 +216,19 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
         <button class="ghost" data-c="wipe">敌方英雄全部阵亡</button>
       </div>
       <p class="help" style="margin-top:8px">开关类作弊对本局一直有效，重新开局后自动关闭。</p>
+    </div>
+  </section>
+  <section id="fsGuide" class="screen overlay" hidden aria-label="全屏玩法">
+    <div class="panel" style="width:min(620px,100%)">
+      <header><h2>全屏玩法（iPhone）</h2><button class="ghost" id="fsClose">知道了</button></header>
+      <p class="fsLead">iPhone 的浏览器不允许网页自己全屏。把游戏「添加到主屏幕」后，从桌面图标打开就是<b>没有地址栏、没有状态栏的全屏横屏游戏</b>，像 App 一样。只需设置一次。</p>
+      <ol class="fsSteps">
+        <li><i>1</i><div><b>用 Safari 打开本页</b><span id="fsInApp">如果你是在微信、Claude 等 App 里点开的链接，先点右上角或底部的「…」/ 指南针图标，选「在 Safari 中打开」。</span></div></li>
+        <li><i>2</i><div><b>点 Safari 底部的分享按钮 <em class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M5 11v9h14v-9"/></svg></em></b><span>横屏时在地址栏右边；也可以点地址栏左边的「⋯ / 页面」菜单找到「分享」。</span></div></li>
+        <li><i>3</i><div><b>选「添加到主屏幕」<em class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></svg></em></b><span>列表里往下滑就能看到，名字保持「星陨峡谷」，点右上角「添加」。</span></div></li>
+        <li><i>4</i><div><b>回到桌面，点「星陨」图标</b><span>以后都从这个图标进，全屏、横屏、存档和设置都会保留。</span></div></li>
+      </ol>
+      <p class="fsNote">安卓手机：在游戏里点右上角 ⛶ 就能直接全屏；也可以在 Chrome 菜单里选「添加到主屏幕 / 安装应用」。</p>
     </div>
   </section>
   <section id="pause" class="screen overlay" hidden>
@@ -2715,13 +2739,22 @@ function ui_toggleFull(){
   const fsEl=d.fullscreenElement||d.webkitFullscreenElement;
   if(fsEl){(d.exitFullscreen||d.webkitExitFullscreen).call(d);return}
   const req=el.requestFullscreen||el.webkitRequestFullscreen;
-  if(req){try{const p=req.call(el,{navigationUI:'hide'});if(p&&p.then)p.then(()=>{try{screen.orientation&&screen.orientation.lock&&screen.orientation.lock('landscape').catch(()=>{})}catch(e){}}).catch(()=>ui_fullHelp());return}catch(e){}}
+  if(req&&!ui_iOS){try{const p=req.call(el,{navigationUI:'hide'});if(p&&p.then)p.then(()=>{try{screen.orientation&&screen.orientation.lock&&screen.orientation.lock('landscape').catch(()=>{})}catch(e){}}).catch(()=>ui_fullHelp());return}catch(e){}}
   ui_fullHelp();
 }
+const ui_iOS=/iP(hone|od|ad)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 function ui_fullHelp(){
   if(ui_isStandalone())return;
-  alert('iPhone 的浏览器不支持网页直接全屏。\n\n全屏玩法：用 Safari 打开本页 → 点底部「分享」按钮 → 「添加到主屏幕」。\n以后从桌面图标打开，就是没有地址栏的全屏游戏。');
+  if(G&&!G.over&&state==='play'&&!G.paused)openPause();
+  const ua=navigator.userAgent,inApp=ui_iOS&&!/Safari\//.test(ua)||/CriOS|FxiOS|EdgiOS|MicroMessenger|Claude/i.test(ua);
+  $('fsInApp').style.fontWeight=inApp?'700':'';$('fsInApp').style.color=inApp?'var(--gold2)':'';
+  $('fsGuide').hidden=false;
 }
+$('fsClose').onclick=()=>{$('fsGuide').hidden=true};
+$('menuFull').onclick=()=>{const el=document.documentElement;if(!ui_iOS&&(el.requestFullscreen||el.webkitRequestFullscreen))ui_toggleFull();else ui_fullHelp()};
+if(ui_isStandalone())$('menuFull').hidden=true;
+// iPhone in the browser: show the guide once automatically
+try{if(ui_iOS&&!ui_isStandalone()&&!localStorage.getItem('xyxg_fsg')){localStorage.setItem('xyxg_fsg','1');setTimeout(ui_fullHelp,600)}}catch(e){}
 $('btnFull').onclick=ui_toggleFull;
 if(ui_isStandalone())$('btnFull').hidden=true;
 </script>
